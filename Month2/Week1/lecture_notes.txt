@@ -1,0 +1,249 @@
+# Week 1: Linear Regression - Enhanced Lecture Notes
+
+## Learning Objectives
+By the end of this week, you will be able to:
+- Understand and implement linear regression from scratch
+- Evaluate model performance using various metrics
+- Handle polynomial relationships and regularization
+- Apply concepts to real-world datasets
+- Diagnose and fix common issues in regression models
+
+## Weekly Schedule
+- Monday: Introduction & Simple Linear Regression
+- Tuesday: Multiple Linear Regression & Implementation
+- Wednesday: Model Evaluation & Regularization
+- Thursday: Polynomial Regression & Bias-Variance Tradeoff
+- Friday: Project Work & Advanced Topics
+
+## 1. Introduction to Linear Regression
+
+### 1.1 Understanding Linear Regression
+Linear regression stands as a foundational pillar in the vast landscape of predictive modeling, offering a remarkably intuitive yet profoundly powerful framework for uncovering relationships between variables. At its essence, linear regression seeks to establish a direct, linear connection between one or more input features and a continuous target variable, elegantly capturing trends and patterns that might otherwise remain obscured within complex datasets. This method’s enduring popularity stems from its simplicity and interpretability, making it an indispensable tool for both novice learners and seasoned data scientists alike.
+
+The process involves fitting a straight line—or, in higher dimensions, a hyperplane—that best describes the relationship between the predictors and the response variable. This best-fit line is not chosen arbitrarily; rather, it is the one that minimizes the discrepancy between observed values and those predicted by the model, a concept we will rigorously define and optimize in the following sections.
+
+### 1.2 Exploring the Spectrum of Linear Models
+Linear regression manifests in two principal forms, each tailored to the complexity of the data at hand. Simple linear regression introduces us to the elegant case of a single predictor variable, where the relationship between the input and output is modeled as a straight line. This foundational model serves as a gateway to understanding the core principles of regression analysis.
+
+As we venture into more realistic scenarios, multiple linear regression emerges as a natural extension, gracefully accommodating multiple predictor variables simultaneously. This model captures the multifaceted nature of real-world phenomena, where outcomes are rarely influenced by a single factor. The mathematical formulation expands accordingly, representing the response as a weighted sum of input features plus an intercept term, encapsulated succinctly in the equation:
+
+```
+y = β₀ + β₁x₁ + β₂x₂ + ... + βₙxₙ + ε
+```
+
+Here, each coefficient β represents the influence of its corresponding predictor, while ε accounts for the inherent noise or unexplained variability in the data. This framework not only facilitates prediction but also offers valuable insights into the relative importance of different features, empowering data-driven decision-making across diverse domains.
+
+## 2. The Mathematical Foundations
+
+### 2.1 The Hypothesis Function
+At the heart of linear regression lies the hypothesis function, a mathematical expression that serves as our predictive engine. This function translates input features into predicted outcomes by combining them linearly with a set of parameters or weights. In the simplest case of a single predictor, the hypothesis forms a straight line characterized by its slope and intercept. However, as we scale to multiple predictors, this concept generalizes to a hyperplane slicing through a multidimensional feature space, where each dimension corresponds to a distinct feature.
+
+Mathematically, the hypothesis function is expressed as:
+
+```
+hθ(x) = θ₀ + θ₁x₁ + θ₂x₂ + ... + θₙxₙ
+```
+
+Here, θ₀ represents the intercept term, while θ₁ through θₙ are the coefficients that quantify the influence of each feature on the predicted outcome. Understanding this function is crucial, as it forms the basis upon which the entire regression model is built.
+
+### 2.2 The Cost Function
+To evaluate how well our model performs, we employ the cost function, which quantifies the discrepancy between the predicted values and the actual observed data. The most commonly used cost function in linear regression is the Mean Squared Error (MSE), which calculates the average of the squares of the errors—the differences between predicted and actual values.
+
+This function not only provides a measure of fit quality but also possesses a convex shape, ensuring a single global minimum. This property is vital as it guarantees that optimization algorithms like gradient descent will converge to the best possible set of parameters.
+
+The cost function is mathematically defined as:
+
+```
+J(θ) = (1/2m) * Σ(hθ(xⁱ) - yⁱ)²
+```
+
+where m is the number of training examples, hθ(xⁱ) is the predicted value for the i-th example, and yⁱ is the actual value.
+
+### 2.3 Gradient Descent
+Optimizing the parameters to minimize the cost function is achieved through gradient descent, an iterative algorithm that takes incremental steps toward the minimum of the cost function. Imagine descending a foggy hill where you can only feel the slope beneath your feet; gradient descent guides you by moving in the direction of steepest descent, gradually reducing the error.
+
+The learning rate, denoted by α, controls the size of these steps. Selecting an appropriate learning rate is a delicate balance—too large, and the algorithm might overshoot the minimum; too small, and convergence becomes painfully slow.
+
+The update rule for each parameter θⱼ is given by:
+
+```
+Repeat until convergence {
+    θⱼ := θⱼ - α * (∂/∂θⱼ)J(θ)
+}
+```
+
+Through this process, the parameters iteratively adjust until the cost function reaches its minimum, resulting in the optimal model fit.
+
+## 3. Practical Implementation
+
+### 3.1 From Theory to Code
+Bringing the abstract mathematical concepts of linear regression into concrete, executable code is a critical step in mastering the technique. This transition transforms theory into practice, allowing us to build models that can learn from data and make predictions.
+
+Central to this implementation is the concept of vectorization, which leverages the power of libraries like NumPy to perform efficient matrix and vector operations. This approach not only accelerates computations but also results in cleaner, more readable code.
+
+Feature scaling is another essential consideration, ensuring that all input features contribute proportionally to the model. Without proper scaling, features with larger numeric ranges can disproportionately influence the model, leading to suboptimal performance.
+
+Finally, the inclusion of a bias term (θ₀) allows the model to fit data that does not necessarily pass through the origin, adding flexibility and improving accuracy.
+
+```python
+import numpy as np
+
+def compute_cost(X, y, theta):
+    """
+    Compute the cost function J(θ) for linear regression
+    
+    Parameters:
+    X : ndarray, shape (m, n+1) - Design matrix with added bias term
+    y : ndarray, shape (m,) - Target values
+    theta : ndarray, shape (n+1,) - Model parameters
+    
+    Returns:
+    float - The cost J(θ)
+    """
+    m = len(y)
+    predictions = X.dot(theta)
+    cost = (1/(2*m)) * np.sum(np.square(predictions - y))
+    return cost
+
+def gradient_descent(X, y, theta, alpha, num_iters):
+    """
+    Perform gradient descent to learn theta
+    
+    Parameters:
+    X : ndarray, shape (m, n+1) - Design matrix with added bias term
+    y : ndarray, shape (m,) - Target values
+    theta : ndarray, shape (n+1,) - Initial parameters
+    alpha : float - Learning rate
+    num_iters : int - Number of iterations
+    
+    Returns:
+    theta : ndarray - Learned parameters
+    cost_history : list - History of cost function values
+    """
+    m = len(y)
+    cost_history = []
+    
+    for _ in range(num_iters):
+        predictions = X.dot(theta)
+        errors = predictions - y
+        gradient = (1/m) * X.T.dot(errors)
+        theta = theta - alpha * gradient
+        cost = compute_cost(X, y, theta)
+        cost_history.append(cost)
+        
+    return theta, cost_history
+```
+
+### 3.2 The Training Process
+Training a linear regression model is akin to sculpting a masterpiece from raw marble. Each iteration of gradient descent carefully chips away at the error, refining the model parameters to better capture the underlying relationship in the data. This iterative process continues until the model reaches convergence, where further adjustments yield negligible improvements.
+
+Visualizing this process through plots of the cost function over iterations provides invaluable insights into the model’s learning dynamics, revealing whether it is converging smoothly or struggling with issues such as a poor learning rate or local minima.
+
+### Exercise 3.1: Simple Linear Regression
+1. Implement the hypothesis function for simple linear regression
+2. Create a function to compute the cost function (MSE)
+3. Implement batch gradient descent to optimize the parameters
+4. Visualize the cost function and the learning process
+
+### Exercise 3.2: Multiple Linear Regression
+1. Extend your implementation to handle multiple features
+2. Implement feature normalization
+3. Add support for both batch and stochastic gradient descent
+4. Compare the convergence rates of different optimization approaches
+
+## 4. Evaluating Model Performance
+
+### 4.1 R-squared (R²)
+R-squared offers a clear lens through which to view the effectiveness of our model, quantifying the proportion of variance in the target variable that can be explained by the predictors. While a higher R² indicates better explanatory power, it is crucial to remain mindful of its tendency to increase with additional features, which may not always translate to genuine predictive improvement.
+
+```
+R² = 1 - (SS_res / SS_tot)
+```
+
+### 4.2 Mean Squared Error (MSE)
+MSE serves as a fundamental metric, capturing the average squared difference between predicted and actual values. Its sensitivity to large errors makes it particularly valuable in contexts where significant deviations are costly or undesirable.
+
+```
+MSE = (1/n) * Σ(y - ŷ)²
+```
+
+### 4.3 Root Mean Squared Error (RMSE)
+By taking the square root of MSE, RMSE restores the error metric to the original units of the target variable, enhancing interpretability and providing intuitive insights into the model's typical prediction error.
+
+```
+RMSE = √MSE
+```
+
+### Exercises
+- Implement R², MSE, and RMSE from scratch and compare with scikit-learn implementations.
+- Visualize training and test errors against model complexity to observe overfitting and underfitting.
+- Implement k-fold cross-validation and analyze its impact on model selection.
+
+## 5. Extending to Polynomial Regression
+
+### 5.1 Capturing Non-linear Relationships
+Polynomial regression extends the linear model by incorporating polynomial terms, enabling it to fit curved relationships inherent in many real-world datasets. This added flexibility allows the model to capture complex patterns but introduces challenges such as increased risk of overfitting.
+
+### 5.2 The Bias-Variance Tradeoff
+Understanding the bias-variance tradeoff is essential when working with polynomial regression. A model with high bias oversimplifies the data, missing important patterns, while a model with high variance overfits, capturing noise as if it were signal. Striking the right balance involves selecting an appropriate polynomial degree and potentially applying regularization techniques.
+
+### Implementation Example
+```python
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
+from sklearn.pipeline import Pipeline
+
+def create_polynomial_model(degree=2, model_type='linear', alpha=1.0):
+    polynomial_features = PolynomialFeatures(degree=degree, include_bias=False)
+    scaler = StandardScaler()
+    if model_type == 'ridge':
+        model = Ridge(alpha=alpha)
+    elif model_type == 'lasso':
+        model = Lasso(alpha=alpha, max_iter=10000)
+    else:
+        model = LinearRegression()
+    return Pipeline([
+        ('poly', polynomial_features),
+        ('scaler', scaler),
+        ('model', model)
+    ])
+```
+
+### Exercises
+- Generate synthetic data with non-linear relationships and fit polynomial models of varying degrees.
+- Implement Ridge and Lasso regression and compare their effects on model complexity.
+- Use cross-validation to identify optimal regularization parameters and polynomial degrees.
+
+## 6. Practical Considerations
+
+### 6.1 Feature Scaling
+- Standardization: (x - μ) / σ
+- Normalization: (x - min) / (max - min)
+
+### 6.2 Handling Categorical Variables
+- One-Hot Encoding
+- Label Encoding
+- Target Encoding
+
+### 6.3 Model Validation
+- Train-Test Split
+- Cross-Validation
+- Learning Curves
+
+## 7. Real-world Applications
+- House price prediction
+- Stock price forecasting
+- Risk assessment in insurance
+- Medical diagnosis
+
+## 8. Common Pitfalls
+1. **Multicollinearity**: When independent variables are highly correlated
+2. **Heteroscedasticity**: Non-constant variance of error terms
+3. **Autocorrelation**: Correlation of error terms
+4. **Outliers**: Can significantly affect the regression line
+
+## 9. Advanced Topics
+- **Regularization**: L1 (Lasso) and L2 (Ridge) regression
+- **Feature Selection**: Using p-values, R-squared, AIC/BIC
+- **Polynomial Features**: Capturing non-linear relationships
+- **Interaction Terms**: Modeling interaction between features

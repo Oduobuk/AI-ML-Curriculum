@@ -1,0 +1,42 @@
+# Core Data Science
+numpy>=1.19.5
+pandas>=1.3.0
+scipy>=1.7.0
+matplotlib>=3.4.0
+seaborn>=0.11.0
+
+# Machine Learning
+scikit-learn>=1.0.0
+xgboost>=1.5.0
+lightgbm>=3.3.0
+catboost>=1.0.0
+
+# Model Interpretation
+shap>=0.40.0
+lime>=0.2.0.1
+
+# Hyperparameter Tuning
+optuna>=2.10.0
+hyperopt>=0.2.5
+
+# Utilities
+tqdm>=4.62.0
+joblib>=1.1.0
+pyyaml>=5.4.1
+
+# Testing and Quality
+pytest>=6.2.5
+black>=21.12b0
+flake8>=4.0.1
+mypy>=0.910
+
+# Jupyter for interactive work
+jupyter>=1.0.0
+ipykernel>=6.4.0
+
+# For handling imbalanced datasets
+imbalanced-learn>=0.8.0
+
+# For working with trees
+graphviz>=0.16
+pydotplus>=2.0.2

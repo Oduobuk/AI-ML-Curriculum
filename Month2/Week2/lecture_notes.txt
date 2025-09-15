@@ -1,0 +1,843 @@
+# Week 2: Logistic Regression and K-Nearest Neighbors (KNN)
+
+## Table of Contents
+1. [Introduction to Classification](#1-introduction-to-classification)
+2. [Logistic Regression](#2-logistic-regression)
+3. [Model Evaluation](#3-model-evaluation)
+4. [K-Nearest Neighbors](#4-k-nearest-neighbors)
+5. [Practical Considerations](#5-practical-considerations)
+6. [Project Implementation](#6-project-implementation)
+
+## 1. Introduction to Classification
+
+### 1.1 The Art and Science of Categorization
+At its core, classification is about teaching machines to make sense of the world by sorting items into meaningful categories. Unlike regression, which predicts continuous values along a spectrum, classification deals with discrete, often mutually exclusive categories. Imagine training a model to distinguish between different types of fruit—this is classification in action. The model learns the defining characteristics of each fruit category (apples are round and red/green, bananas are long and yellow) and uses these learned patterns to categorize new, unseen examples.
+
+### 1.2 The Classification Spectrum
+Classification problems span a fascinating range of complexity and structure:
+
+- **Binary Classification**: The simplest form where we distinguish between just two possibilities. Think of medical tests (disease present/absent) or email filtering (spam/not spam). The beauty of binary classification lies in its simplicity and the clear decision boundary it creates in the feature space.
+
+- **Multiclass Classification**: Here we navigate a landscape with multiple distinct categories. A classic example is handwritten digit recognition, where the model must distinguish between 10 possible digits. The challenge increases exponentially as we add more classes, requiring more sophisticated decision boundaries and careful consideration of class relationships.
+
+- **Multilabel Classification**: The most complex scenario where each instance can belong to multiple categories simultaneously. Consider a movie recommendation system where a single film might be tagged as both 'action' and 'sci-fi'. This requires models that can capture the nuanced relationships between potentially overlapping categories.
+
+## 2. Logistic Regression: The Workhorse of Classification
+
+### 2.1 The Sigmoid Function: Bridging Regression and Classification
+At first glance, logistic regression might seem like a misnomer—after all, it's used for classification, not regression. The magic lies in how it leverages the sigmoid function (also known as the logistic function) to transform linear regression outputs into probability estimates between 0 and 1. This S-shaped curve acts as a mathematical gatekeeper, smoothly transitioning from one class to another.
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+def sigmoid(z):
+    """
+    The sigmoid function maps any real-valued number to the (0,1) interval,
+    making it perfect for estimating probabilities.
+    """
+    return 1 / (1 + np.exp(-z))
+
+# Visualizing the sigmoid function
+z = np.linspace(-10, 10, 100)
+plt.figure(figsize=(10, 6))
+plt.plot(z, sigmoid(z), 'b-', linewidth=2)
+plt.axhline(y=0.5, color='r', linestyle='--')
+plt.axvline(x=0, color='g', linestyle='--')
+plt.title('Sigmoid Function')
+plt.xlabel('z')
+plt.ylabel('σ(z)')
+plt.grid(True)
+plt.show()
+```
+
+### 2.2 The Decision Boundary: Where Classes Divide
+Every classification model needs a way to separate different classes, and logistic regression creates this separation through its decision boundary. This boundary isn't just a simple line—it's a hyperplane in the feature space where the predicted probability is exactly 0.5. The beauty of logistic regression is that this boundary is linear in the parameters, making it both interpretable and computationally efficient.
+
+### 2.3 The Cost Function: Penalizing Wrong Predictions
+While mean squared error works well for regression, logistic regression requires a different approach because its predictions are probabilities. The log loss function (also called cross-entropy loss) is specifically designed to handle probabilities, heavily penalizing confident but incorrect predictions. This creates a convex optimization landscape that gradient descent can efficiently navigate.
+
+## 3. The Art and Science of Model Evaluation
+
+### 3.1 The Confusion Matrix: Beyond Simple Accuracy
+A confusion matrix is more than just a table of numbers—it's a powerful diagnostic tool that reveals the true nature of your model's performance. Each cell tells a story about how your model's predictions align (or don't align) with reality. The beauty of the confusion matrix lies in its ability to show not just how many predictions were correct, but what kinds of mistakes the model is making.
+
+```python
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+def plot_confusion_matrix(y_true, y_pred, classes, title='Confusion Matrix'):
+    """Create a visually appealing confusion matrix plot"""
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                xticklabels=classes, yticklabels=classes)
+    plt.title(title)
+    plt.ylabel('True Label')
+    plt.xlabel('Predicted Label')
+    plt.tight_layout()
+    plt.show()
+
+# Example usage:
+# plot_confusion_matrix(y_test, y_pred, classes=['Negative', 'Positive'])
+```
+
+### 3.2 Metrics That Matter: Choosing the Right Yardstick
+Different classification problems demand different performance metrics. Here's how to choose the right one:
+
+- **Accuracy**: The most intuitive metric, but can be misleading with imbalanced classes. Imagine a medical test that always says "healthy"—it would be 99% accurate if only 1% of people have the disease!
+
+- **Precision**: When false positives are costly (e.g., spam filtering where legitimate emails marked as spam is bad). High precision means when your model predicts positive, you can trust it.
+
+- **Recall**: When false negatives are dangerous (e.g., cancer screening). High recall means you're not missing many actual positive cases.
+
+- **F1 Score**: The harmonic mean of precision and recall, perfect when you need to balance both concerns. Particularly useful when class distribution is uneven.
+
+### 3.3 ROC and AUC: The Gold Standard for Binary Classification
+The Receiver Operating Characteristic (ROC) curve is a masterpiece of model evaluation, showing the trade-off between sensitivity (true positive rate) and specificity (false positive rate) across different decision thresholds. The Area Under the Curve (AUC) gives you a single number to compare models—the closer to 1.0, the better your model is at distinguishing between classes.
+
+```python
+from sklearn.metrics import roc_curve, roc_auc_score
+import matplotlib.pyplot as plt
+
+def plot_roc_curve(y_true, y_scores, model_name='Model'):
+    """Plot a beautiful ROC curve with AUC score"""
+    fpr, tpr, _ = roc_curve(y_true, y_scores)
+    roc_auc = roc_auc_score(y_true, y_scores)
+    
+    plt.figure(figsize=(10, 8))
+    plt.plot(fpr, tpr, color='darkorange', lw=2, 
+             label=f'{model_name} (AUC = {roc_auc:.2f})')
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate (1 - Specificity)')
+    plt.ylabel('True Positive Rate (Sensitivity)')
+    plt.title('Receiver Operating Characteristic (ROC) Curve')
+    plt.legend(loc="lower right")
+    plt.grid(True, alpha=0.3)
+    plt.show()
+    
+    return roc_auc
+
+# Example usage:
+# y_scores = model.predict_proba(X_test)[:, 1]  # Get probability scores
+# plot_roc_curve(y_test, y_scores, 'Logistic Regression')
+```
+
+### 3.4 Precision-Recall Curves: When Class Imbalance Strikes
+When dealing with highly imbalanced datasets, the Precision-Recall (PR) curve often tells a more truthful story than ROC. It focuses on the performance of the classifier on the positive (minority) class, making it particularly useful when the positive class is more important than the negative class.
+
+```python
+from sklearn.metrics import precision_recall_curve, average_precision_score
+
+def plot_pr_curve(y_true, y_scores, model_name='Model'):
+    """Plot precision-recall curve with Average Precision score"""
+    precision, recall, _ = precision_recall_curve(y_true, y_scores)
+    avg_precision = average_precision_score(y_true, y_scores)
+    
+    plt.figure(figsize=(10, 8))
+    plt.step(recall, precision, where='post', 
+             label=f'{model_name} (AP = {avg_precision:.2f})')
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.ylim([0.0, 1.05])
+    plt.xlim([0.0, 1.0])
+    plt.title('Precision-Recall Curve')
+    plt.legend(loc="upper right")
+    plt.grid(True, alpha=0.3)
+    plt.show()
+    
+    return avg_precision
+```
+
+## 4. K-Nearest Neighbors: The Intuitive Classifier
+
+### 4.1 The Essence of KNN: Learning by Example
+K-Nearest Neighbors (KNN) embodies the principle that "birds of a feather flock together." Unlike parametric models that learn explicit decision boundaries during training, KNN is a lazy learner that simply stores the training data. When making predictions, it looks at the k most similar training examples (the "nearest neighbors") and takes a majority vote (for classification) or an average (for regression). This instance-based learning approach makes KNN remarkably simple yet powerful, especially for low-dimensional data with clear cluster structures.
+
+### 4.2 The Geometry of Similarity: Distance Metrics
+The heart of KNN lies in how it measures similarity between data points. Different distance metrics can lead to vastly different decision boundaries:
+
+1. **Euclidean Distance** (L₂ norm): The straight-line distance between points in feature space. Ideal for continuous variables measured on similar scales. 
+   $$\text{Euclidean}(x,y) = \sqrt{\sum_{i=1}^{n} (x_i - y_i)^2}$$
+
+2. **Manhattan Distance** (L₁ norm): The sum of absolute differences along each dimension. More robust to outliers than Euclidean distance and works well with high-dimensional sparse data.
+   $$\text{Manhattan}(x,y) = \sum_{i=1}^{n} |x_i - y_i|$$
+
+3. **Minkowski Distance**: A generalized distance metric that includes both Euclidean and Manhattan as special cases. The parameter p controls the sensitivity to outliers.
+   $$\text{Minkowski}(x,y) = \left(\sum_{i=1}^{n} |x_i - y_i|^p\right)^{1/p}$$
+
+4. **Cosine Similarity**: Measures the angle between vectors rather than their magnitude, making it ideal for text classification and recommendation systems.
+   $$\text{Cosine}(x,y) = \frac{x \cdot y}{\|x\|\|y\|}$$
+
+### 4.3 The Art of Choosing k: Bias-Variance Tradeoff
+The choice of k (number of neighbors) dramatically affects the model's behavior:
+
+- **Small k (e.g., 1)**: Creates complex, wiggly decision boundaries that fit the training data perfectly but may not generalize well (high variance, low bias).
+- **Large k**: Results in smoother decision boundaries that are more robust to noise but might oversimplify the true underlying patterns (low variance, high bias).
+
+```python
+from sklearn.neighbors import KNeighborsClassifier
+import matplotlib.pyplot as plt
+from sklearn.model_selection import cross_val_score
+
+# Find optimal k using cross-validation
+k_values = list(range(1, 31, 2))
+cv_scores = []
+
+for k in k_values:
+    knn = KNeighborsClassifier(n_neighbors=k, metric='euclidean')
+    scores = cross_val_score(knn, X_train, y_train, cv=5, scoring='accuracy')
+    cv_scores.append(scores.mean())
+
+# Plot accuracy vs k
+plt.figure(figsize=(10, 6))
+plt.plot(k_values, cv_scores, marker='o')
+plt.title('KNN: Accuracy vs. Number of Neighbors')
+plt.xlabel('Number of Neighbors (k)')
+plt.ylabel('Cross-Validated Accuracy')
+plt.grid(True)
+plt.show()
+
+# Initialize and fit the model with optimal k
+optimal_k = k_values[cv_scores.index(max(cv_scores))]
+knn = KNeighborsClassifier(n_neighbors=optimal_k, metric='euclidean')
+knn.fit(X_train, y_train)
+
+# Make predictions
+y_pred = knn.predict(X_test)
+```
+
+### 4.4 Advanced KNN Techniques
+
+#### Weighted KNN
+Instead of giving equal weight to all neighbors, we can weight them by their distance, giving more importance to closer neighbors:
+
+```python
+knn_weighted = KNeighborsClassifier(
+    n_neighbors=optimal_k, 
+    weights='distance',  # Weight points by inverse of their distance
+    metric='euclidean'
+)
+```
+
+#### KD-Trees and Ball Trees
+For efficient nearest neighbor searches in high-dimensional spaces, KNN can use specialized data structures:
+
+```python
+# Using a Ball Tree for efficient search in high dimensions
+knn_balltree = KNeighborsClassifier(
+    n_neighbors=optimal_k,
+    algorithm='ball_tree',  # or 'kd_tree', 'brute'
+    metric='euclidean'
+)
+```
+
+#### Feature Scaling
+Since KNN relies on distance calculations, it's crucial to scale features to similar ranges:
+
+```python
+from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Now fit KNN on scaled data
+knn.fit(X_train_scaled, y_train)
+```
+
+### 4.5 When to Use KNN
+KNN shines in scenarios where:
+- The decision boundary is highly irregular
+- You have plenty of training data (but not too many features)
+- The relationship between features and target is complex but locally smooth
+- Interpretability of individual predictions is valuable
+
+However, be cautious with:
+- High-dimensional data (curse of dimensionality)
+- Large datasets (can be computationally expensive)
+- Features with different scales (always scale first!)
+- Noisy data (KNN is sensitive to irrelevant features)
+
+## 5. Practical Considerations in Classification
+
+### 5.1 The Critical Role of Feature Scaling
+Feature scaling is not just a preprocessing step—it's a fundamental aspect that can make or break your model's performance. Different algorithms have different sensitivities to feature scales, and understanding these nuances is crucial for building robust models.
+
+#### Why Scaling Matters
+- **Distance-based algorithms** (like KNN, SVM with RBF kernel) are heavily affected by the scale of features since they rely on distance calculations.
+- **Gradient descent-based algorithms** (like logistic regression with gradient descent) converge faster with scaled features.
+- **Regularization** penalizes all coefficients equally, so features on larger scales can dominate the penalty term.
+
+#### Common Scaling Techniques
+
+```python
+from sklearn.preprocessing import (
+    StandardScaler,  # Standardize features by removing the mean and scaling to unit variance
+    MinMaxScaler,    # Scale features to a given range (default 0-1)
+    RobustScaler,    # Scale features using statistics that are robust to outliers
+    MaxAbsScaler     # Scale each feature by its maximum absolute value
+)
+
+# Example: Standardization (Z-score normalization)
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)  # Fit on training data
+X_test_scaled = scaler.transform(X_test)       # Apply same transformation to test data
+
+# Example: Min-Max Scaling (to [0,1] range)
+from sklearn.preprocessing import MinMaxScaler
+minmax_scaler = MinMaxScaler(feature_range=(0, 1))
+X_train_minmax = minmax_scaler.fit_transform(X_train)
+X_test_minmax = minmax_scaler.transform(X_test)
+```
+
+### 5.2 Handling Class Imbalance: Beyond Simple Accuracy
+Class imbalance is the elephant in the room for many real-world classification problems. When one class vastly outnumbers the others, accuracy becomes a misleading metric, and models often learn to predict the majority class by default.
+
+#### Strategies to Handle Imbalance
+
+1. **Resampling Techniques**
+   ```python
+   from imblearn.over_sampling import SMOTE, RandomOverSampler
+   from imblearn.under_sampling import RandomUnderSampler
+   from imblearn.pipeline import Pipeline
+   
+   # Oversample the minority class using SMOTE
+   smote = SMOTE(random_state=42, sampling_strategy='minority')
+   X_resampled, y_resampled = smote.fit_resample(X_train, y_train)
+   
+   # Or create a pipeline that combines SMOTE with model
+   pipeline = Pipeline([
+       ('sampling', SMOTE(random_state=42)),
+       ('classification', LogisticRegression())
+   ])
+   ```
+
+2. **Class Weights**
+   ```python
+   # Automatically adjust weights inversely proportional to class frequencies
+   model = LogisticRegression(class_weight='balanced')
+   
+   # Or specify custom weights
+   class_weights = {0: 1, 1: 10}  # Higher weight for class 1
+   model = LogisticRegression(class_weight=class_weights)
+   ```
+
+3. **Alternative Evaluation Metrics**
+   - Precision-Recall curves (better than ROC for imbalanced data)
+   - F1-score (harmonic mean of precision and recall)
+   - Cohen's Kappa (agreement between predicted and actual classes)
+   - Matthews Correlation Coefficient (balanced measure for binary classification)
+
+### 5.3 The Art of Feature Engineering
+Feature engineering is where domain knowledge meets machine learning. Well-crafted features can dramatically improve model performance and interpretability.
+
+#### Feature Engineering Techniques
+
+1. **Creating Interaction Terms**
+   ```python
+   # Create polynomial features
+   from sklearn.preprocessing import PolynomialFeatures
+   
+   poly = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
+   X_poly = poly.fit_transform(X[['feature1', 'feature2']])
+   ```
+
+2. **Binning Continuous Variables**
+   ```python
+   # Create bins for age groups
+   bins = [0, 18, 35, 50, 100]
+   labels = ['0-18', '19-35', '36-50', '51+']
+   df['age_group'] = pd.cut(df['age'], bins=bins, labels=labels)
+   ```
+
+3. **Date/Time Features**
+   ```python
+   # Extract meaningful features from datetime
+   df['hour'] = df['timestamp'].dt.hour
+   df['day_of_week'] = df['timestamp'].dt.dayofweek
+   df['is_weekend'] = df['day_of_week'].isin([5, 6]).astype(int)
+   ```
+
+### 5.4 Hyperparameter Tuning: Finding the Sweet Spot
+Hyperparameters are the knobs and dials of machine learning models. Tuning them properly can be the difference between a mediocre model and an outstanding one.
+
+#### Grid Search with Cross-Validation
+```python
+from sklearn.model_selection import GridSearchCV
+from sklearn.ensemble import RandomForestClassifier
+
+# Define parameter grid
+param_grid = {
+    'n_estimators': [50, 100, 200],
+    'max_depth': [None, 10, 20, 30],
+    'min_samples_split': [2, 5, 10],
+    'min_samples_leaf': [1, 2, 4]
+}
+
+# Initialize grid search
+grid_search = GridSearchCV(
+    estimator=RandomForestClassifier(random_state=42),
+    param_grid=param_grid,
+    cv=5,
+    scoring='f1',
+    n_jobs=-1,
+    verbose=1
+)
+
+# Fit grid search
+grid_search.fit(X_train, y_train)
+
+# Best parameters and score
+print(f"Best parameters: {grid_search.best_params_}")
+print(f"Best cross-validation score: {grid_search.best_score_:.3f}")
+```
+
+#### Randomized Search for Efficiency
+```python
+from sklearn.model_selection import RandomizedSearchCV
+from scipy.stats import randint, uniform
+
+# Define parameter distributions
+param_dist = {
+    'n_estimators': randint(50, 500),
+    'max_depth': [None] + list(range(5, 50, 5)),
+    'min_samples_split': randint(2, 20),
+    'min_samples_leaf': randint(1, 10),
+    'max_features': ['sqrt', 'log2', None]
+}
+
+# Initialize random search
+random_search = RandomizedSearchCV(
+    estimator=RandomForestClassifier(random_state=42),
+    param_distributions=param_dist,
+    n_iter=50,  # Number of parameter settings sampled
+    cv=5,
+    scoring='f1',
+    n_jobs=-1,
+    random_state=42,
+    verbose=1
+)
+
+# Fit random search
+random_search.fit(X_train, y_train)
+```
+
+### 5.5 The Bias-Variance Tradeoff in Practice
+Understanding the bias-variance tradeoff is crucial for building models that generalize well to unseen data.
+
+#### Diagnosing Model Issues
+- **High Bias (Underfitting)**:
+  - Training error is high
+  - Validation error is high and close to training error
+  - The model is too simple for the data
+  
+- **High Variance (Overfitting)**:
+  - Training error is low
+  - Validation error is significantly higher than training error
+  - The model has memorized the training data
+
+#### Solutions
+- **For High Bias**:
+  - Add more features
+  - Use a more complex model
+  - Decrease regularization
+  - Add interaction terms
+  
+- **For High Variance**:
+  - Get more training data
+  - Use regularization
+  - Reduce model complexity
+  - Use feature selection
+  - Apply dropout (for neural networks)
+
+### 5.6 Model Interpretability: Seeing the Forest for the Trees
+In many real-world applications, understanding why a model makes certain predictions is just as important as the predictions themselves.
+
+#### Feature Importance
+```python
+# For tree-based models
+model = RandomForestClassifier()
+model.fit(X_train, y_train)
+
+# Get feature importances
+importances = model.feature_importances_
+
+# Create a DataFrame for visualization
+feature_importance = pd.DataFrame({
+    'feature': X_train.columns,
+    'importance': importances
+}).sort_values('importance', ascending=False)
+
+# Plot feature importance
+plt.figure(figsize=(10, 6))
+sns.barplot(x='importance', y='feature', data=feature_importance)
+plt.title('Feature Importance')
+plt.tight_layout()
+plt.show()
+```
+
+#### SHAP Values for Model Interpretation
+```python
+import shap
+
+# Create explainer
+explainer = shap.TreeExplainer(model)
+shap_values = explainer.shap_values(X_test)
+
+# Summary plot
+shap.summary_plot(shap_values, X_test, plot_type="bar")
+
+# Dependence plot for a specific feature
+shap.dependence_plot("feature_name", shap_values, X_test)
+```
+
+By carefully considering these practical aspects, you'll be well-equipped to build classification models that not only perform well on paper but also deliver real-world value.
+
+## 6. End-to-End Project: Credit Card Fraud Detection
+
+In this comprehensive project, we'll build a complete classification pipeline to detect fraudulent credit card transactions. This real-world scenario will help you apply all the concepts we've covered while dealing with common challenges like class imbalance and feature engineering.
+
+### 6.1 Problem Understanding and Data Exploration
+
+#### Loading and Exploring the Data
+```python
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, precision_recall_curve, auc
+
+# Load the dataset
+df = pd.read_csv('datasets/creditcard.csv')
+
+# Initial exploration
+print(f"Dataset shape: {df.shape}")
+print("\nFirst few rows:")
+display(df.head())
+
+# Check for missing values
+print("\nMissing values per column:")
+print(df.isnull().sum())
+
+# Class distribution
+plt.figure(figsize=(8, 5))
+sns.countplot(x='Class', data=df)
+plt.title('Class Distribution')
+plt.show()
+
+# Transaction amount statistics
+print("\nTransaction Amount Statistics:")
+print(df['Amount'].describe())
+
+# Time vs. Transactions
+plt.figure(figsize=(12, 6))
+plt.hist(df['Time'] / 3600, bins=48)
+plt.xlabel('Hour of Day')
+plt.ylabel('Number of Transactions')
+plt.title('Transaction Frequency by Hour')
+plt.show()
+```
+
+### 6.2 Data Preprocessing and Feature Engineering
+
+#### Feature Engineering
+```python
+# Create time-based features
+def create_time_features(df):
+    # Convert seconds to hours
+    df['hour'] = (df['Time'] / 3600) % 24
+    df['hour_sin'] = np.sin(2 * np.pi * df['hour']/24.0)
+    df['hour_cos'] = np.cos(2 * np.pi * df['hour']/24.0)
+    
+    # Create time since first transaction
+    df['time_since_first'] = df['Time'] - df['Time'].min()
+    
+    # Drop the original time column
+    return df.drop('Time', axis=1)
+
+# Apply transformations
+df = create_time_features(df)
+
+# Scale the 'Amount' feature
+scaler = StandardScaler()
+df['scaled_amount'] = scaler.fit_transform(df['Amount'].values.reshape(-1, 1))
+df = df.drop('Amount', axis=1)
+
+# Separate features and target
+X = df.drop('Class', axis=1)
+y = df['Class']
+
+# Split into train and test sets
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+```
+
+### 6.3 Model Building and Evaluation
+
+#### Logistic Regression with Class Weighting
+```python
+# Create a pipeline with SMOTE and Logistic Regression
+pipeline_lr = Pipeline([
+    ('sampling', SMOTE(random_state=42)),
+    ('scaler', StandardScaler()),
+    ('classifier', LogisticRegression(
+        class_weight='balanced',
+        random_state=42,
+        max_iter=1000,
+        solver='saga',
+        penalty='l1',
+        C=0.1
+    ))
+])
+
+# Train the model
+pipeline_lr.fit(X_train, y_train)
+
+# Make predictions
+y_pred_lr = pipeline_lr.predict(X_test)
+y_pred_proba_lr = pipeline_lr.predict_proba(X_test)[:, 1]
+
+# Evaluate
+print("\nLogistic Regression Performance:")
+print(classification_report(y_test, y_pred_lr))
+print(f"ROC-AUC: {roc_auc_score(y_test, y_pred_proba_lr):.4f}")
+
+# Plot confusion matrix
+plot_confusion_matrix(y_test, y_pred_lr, ['Genuine', 'Fraud'], 
+                     title='Logistic Regression Confusion Matrix')
+```
+
+#### Random Forest with Class Weighting
+```python
+# Create a pipeline with SMOTE and Random Forest
+pipeline_rf = Pipeline([
+    ('sampling', SMOTE(random_state=42)),
+    ('classifier', RandomForestClassifier(
+        class_weight='balanced_subsample',
+        random_state=42,
+        n_estimators=100,
+        max_depth=10,
+        min_samples_leaf=5,
+        n_jobs=-1
+    ))
+])
+
+# Train the model
+pipeline_rf.fit(X_train, y_train)
+
+# Make predictions
+y_pred_rf = pipeline_rf.predict(X_test)
+y_pred_proba_rf = pipeline_rf.predict_proba(X_test)[:, 1]
+
+# Evaluate
+print("\nRandom Forest Performance:")
+print(classification_report(y_test, y_pred_rf))
+print(f"ROC-AUC: {roc_auc_score(y_test, y_pred_proba_rf):.4f}")
+
+# Plot confusion matrix
+plot_confusion_matrix(y_test, y_pred_rf, ['Genuine', 'Fraud'], 
+                     title='Random Forest Confusion Matrix')
+```
+
+### 6.4 Model Comparison and Business Impact
+
+#### ROC and Precision-Recall Curves
+```python
+# Plot ROC curves
+plt.figure(figsize=(10, 8))
+
+# Logistic Regression
+fpr_lr, tpr_lr, _ = roc_curve(y_test, y_pred_proba_lr)
+roc_auc_lr = auc(fpr_lr, tpr_lr)
+plt.plot(fpr_lr, tpr_lr, label=f'Logistic Regression (AUC = {roc_auc_lr:.4f})')
+
+# Random Forest
+fpr_rf, tpr_rf, _ = roc_curve(y_test, y_pred_proba_rf)
+roc_auc_rf = auc(fpr_rf, tpr_rf)
+plt.plot(fpr_rf, tpr_rf, label=f'Random Forest (AUC = {roc_auc_rf:.4f})')
+
+# Random classifier
+plt.plot([0, 1], [0, 1], 'k--')
+
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver Operating Characteristic (ROC) Curve')
+plt.legend(loc="lower right")
+plt.grid(True, alpha=0.3)
+plt.show()
+
+# Plot Precision-Recall curves
+plt.figure(figsize=(10, 8))
+
+# Logistic Regression
+precision_lr, recall_lr, _ = precision_recall_curve(y_test, y_pred_proba_lr)
+ap_lr = average_precision_score(y_test, y_pred_proba_lr)
+plt.step(recall_lr, precision_lr, where='post', 
+         label=f'Logistic Regression (AP = {ap_lr:.4f})')
+
+# Random Forest
+precision_rf, recall_rf, _ = precision_recall_curve(y_test, y_pred_proba_rf)
+ap_rf = average_precision_score(y_test, y_pred_proba_rf)
+plt.step(recall_rf, precision_rf, where='post', 
+         label=f'Random Forest (AP = {ap_rf:.4f})')
+
+plt.xlabel('Recall')
+plt.ylabel('Precision')
+plt.ylim([0.0, 1.05])
+plt.xlim([0.0, 1.0])
+plt.title('Precision-Recall Curve')
+plt.legend(loc="upper right")
+plt.grid(True, alpha=0.3)
+plt.show()
+```
+
+#### Feature Importance Analysis
+```python
+# Get feature importances from the Random Forest
+feature_importance = pipeline_rf.named_steps['classifier'].feature_importances_
+
+# Create a DataFrame for visualization
+importance_df = pd.DataFrame({
+    'feature': X_train.columns,
+    'importance': feature_importance
+}).sort_values('importance', ascending=False)
+
+# Plot top 20 most important features
+plt.figure(figsize=(12, 8))
+sns.barplot(x='importance', y='feature', data=importance_df.head(20))
+plt.title('Top 20 Most Important Features (Random Forest)')
+plt.tight_layout()
+plt.show()
+
+# Get coefficients from Logistic Regression
+if hasattr(pipeline_lr.named_steps['classifier'], 'coef_'):
+    coef = pipeline_lr.named_steps['classifier'].coef_[0]
+    coef_df = pd.DataFrame({
+        'feature': X_train.columns,
+        'coefficient': coef,
+        'abs_coefficient': np.abs(coef)
+    }).sort_values('abs_coefficient', ascending=False)
+    
+    # Plot top 20 most important features
+    plt.figure(figsize=(12, 8))
+    sns.barplot(x='coefficient', y='feature', data=coef_df.head(20))
+    plt.title('Top 20 Most Important Features (Logistic Regression)')
+    plt.tight_layout()
+    plt.show()
+```
+
+### 6.5 Model Deployment Considerations
+
+#### Threshold Tuning for Business Needs
+```python
+def find_optimal_threshold(y_true, y_pred_proba, metric='f1'):
+    """Find the optimal threshold that maximizes the specified metric."""
+    from sklearn.metrics import f1_score, precision_score, recall_score
+    
+    thresholds = np.linspace(0.1, 0.9, 50)
+    scores = []
+    
+    for threshold in thresholds:
+        y_pred = (y_pred_proba >= threshold).astype(int)
+        if metric == 'f1':
+            scores.append(f1_score(y_true, y_pred))
+        elif metric == 'precision':
+            scores.append(precision_score(y_true, y_pred))
+        elif metric == 'recall':
+            scores.append(recall_score(y_true, y_pred))
+    
+    optimal_idx = np.argmax(scores)
+    return thresholds[optimal_idx], scores[optimal_idx]
+
+# Find optimal threshold for F1 score
+optimal_threshold, best_score = find_optimal_threshold(y_test, y_pred_proba_rf, 'f1')
+print(f"Optimal threshold: {optimal_threshold:.4f} (F1 = {best_score:.4f})")
+
+# Make predictions with optimal threshold
+y_pred_optimal = (y_pred_proba_rf >= optimal_threshold).astype(int)
+print("\nOptimized Random Forest Performance:")
+print(classification_report(y_test, y_pred_optimal))
+```
+
+#### Model Persistence
+```python
+import joblib
+
+# Save the trained model
+joblib.dump(pipeline_rf, 'credit_card_fraud_detector.pkl')
+
+# To load the model later:
+# loaded_model = joblib.load('credit_card_fraud_detector.pkl')
+```
+
+### 6.6 Final Recommendations and Next Steps
+
+1. **Model Selection**: Based on the evaluation metrics, choose the model that best balances precision and recall for your specific business needs.
+
+2. **Deployment Strategy**:
+   - Start with a small percentage of transactions being processed by the model
+   - Implement human review for borderline cases
+   - Set up monitoring for model drift and performance degradation
+
+3. **Continuous Improvement**:
+   - Collect feedback on false positives/negatives
+   - Periodically retrain the model with new data
+   - Experiment with additional features and model architectures
+
+4. **Business Impact**:
+   - Calculate potential cost savings from fraud prevention
+   - Monitor customer impact (false positives affecting legitimate transactions)
+   - Balance fraud prevention with customer experience
+
+### 6.1 End-to-End Workflow
+1. Data loading and exploration
+2. Data preprocessing
+3. Train-test split
+4. Model training and evaluation
+5. Hyperparameter tuning
+6. Model interpretation
+
+### 6.2 Example Project: Credit Card Fraud Detection
+```python
+# Sample code structure
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report
+
+# Load data
+data = pd.read_csv('creditcard.csv')
+
+# Preprocessing
+X = data.drop('Class', axis=1)
+y = data['Class']
+
+# Split data
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# Train model
+model = LogisticRegression(max_iter=1000)
+model.fit(X_train, y_train)
+
+# Evaluate
+predictions = model.predict(X_test)
+print(classification_report(y_test, predictions))
+```
+
+## References
+1. Hastie, T., Tibshirani, R., & Friedman, J. (2009). The Elements of Statistical Learning.
+2. Géron, A. (2019). Hands-On Machine Learning with Scikit-Learn, Keras, and TensorFlow.
+3. VanderPlas, J. (2016). Python Data Science Handbook.
