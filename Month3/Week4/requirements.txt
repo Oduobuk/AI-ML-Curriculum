@@ -1,0 +1,22 @@
+# Core
+numpy>=1.19.5
+pandas>=1.2.0
+matplotlib>=3.3.4
+seaborn>=0.11.1
+
+# Deep Learning Frameworks
+tensorflow>=2.5.0
+torch>=1.9.0
+torchvision>=0.10.0
+torchaudio>=0.9.0
+
+# Utilities
+scikit-learn>=0.24.2
+jupyter>=1.0.0
+ipykernel>=5.4.0
+
+# Visualization
+plotly>=4.14.3
+
+# For GPU support (optional)
+# cupy-cuda11x  # Uncomment and replace x with your CUDA version if needed
