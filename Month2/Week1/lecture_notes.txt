@@ -27,34 +27,20 @@ Linear regression manifests in two principal forms, each tailored to the complex
 
 As we venture into more realistic scenarios, multiple linear regression emerges as a natural extension, gracefully accommodating multiple predictor variables simultaneously. This model captures the multifaceted nature of real-world phenomena, where outcomes are rarely influenced by a single factor. The mathematical formulation expands accordingly, representing the response as a weighted sum of input features plus an intercept term, encapsulated succinctly in the equation:
 
-```
-y = β₀ + β₁x₁ + β₂x₂ + ... + βₙxₙ + ε
-```
 
-Here, each coefficient β represents the influence of its corresponding predictor, while ε accounts for the inherent noise or unexplained variability in the data. This framework not only facilitates prediction but also offers valuable insights into the relative importance of different features, empowering data-driven decision-making across diverse domains.
 
 ## 2. The Mathematical Foundations
 
 ### 2.1 The Hypothesis Function
 At the heart of linear regression lies the hypothesis function, a mathematical expression that serves as our predictive engine. This function translates input features into predicted outcomes by combining them linearly with a set of parameters or weights. In the simplest case of a single predictor, the hypothesis forms a straight line characterized by its slope and intercept. However, as we scale to multiple predictors, this concept generalizes to a hyperplane slicing through a multidimensional feature space, where each dimension corresponds to a distinct feature.
 
-Mathematically, the hypothesis function is expressed as:
-
-```
-hθ(x) = θ₀ + θ₁x₁ + θ₂x₂ + ... + θₙxₙ
-```
-
-Here, θ₀ represents the intercept term, while θ₁ through θₙ are the coefficients that quantify the influence of each feature on the predicted outcome. Understanding this function is crucial, as it forms the basis upon which the entire regression model is built.
 
 ### 2.2 The Cost Function
 To evaluate how well our model performs, we employ the cost function, which quantifies the discrepancy between the predicted values and the actual observed data. The most commonly used cost function in linear regression is the Mean Squared Error (MSE), which calculates the average of the squares of the errors—the differences between predicted and actual values.
 
 This function not only provides a measure of fit quality but also possesses a convex shape, ensuring a single global minimum. This property is vital as it guarantees that optimization algorithms like gradient descent will converge to the best possible set of parameters.
 
-The cost function is mathematically defined as:
-
-```
-J(θ) = (1/2m) * Σ(hθ(xⁱ) - yⁱ)²
+Ctrl
 ```
 
 where m is the number of training examples, hθ(xⁱ) is the predicted value for the i-th example, and yⁱ is the actual value.
@@ -64,13 +50,7 @@ Optimizing the parameters to minimize the cost function is achieved through grad
 
 The learning rate, denoted by α, controls the size of these steps. Selecting an appropriate learning rate is a delicate balance—too large, and the algorithm might overshoot the minimum; too small, and convergence becomes painfully slow.
 
-The update rule for each parameter θⱼ is given by:
 
-```
-Repeat until convergence {
-    θⱼ := θⱼ - α * (∂/∂θⱼ)J(θ)
-}
-```
 
 Through this process, the parameters iteratively adjust until the cost function reaches its minimum, resulting in the optimal model fit.
 
