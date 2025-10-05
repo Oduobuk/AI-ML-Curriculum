@@ -1,4 +1,5 @@
 """
+<<<<<<< HEAD
 Exercise 2: t-SNE and UMAP for Non-linear Dimensionality Reduction
 
 In this exercise, you'll explore t-SNE and UMAP for visualizing high-dimensional data.
@@ -110,11 +111,40 @@ def compare_tsne_umap(X, y, n_components=2):
                        metric='euclidean')
     X_umap = reducer.fit_transform(X)
     print(f"UMAP completed in {time.time() - start_time:.1f} seconds")
+=======
+Exercise 2: t-SNE and UMAP Comparison
+
+Compare t-SNE and UMAP for visualizing high-dimensional data.
+"""
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.datasets import load_digits
+from sklearn.manifold import TSNE
+import umap
+from sklearn.preprocessing import StandardScaler
+
+def main():
+    # Load and preprocess data
+    digits = load_digits()
+    X = StandardScaler().fit_transform(digits.data)
+    y = digits.target
+    
+    # Run t-SNE
+    print("Running t-SNE...")
+    tsne = TSNE(n_components=2, random_state=42)
+    X_tsne = tsne.fit_transform(X)
+    
+    # Run UMAP
+    print("Running UMAP...")
+    reducer = umap.UMAP(random_state=42)
+    X_umap = reducer.fit_transform(X)
+>>>>>>> student-branch
     
     # Plot results
     plt.figure(figsize=(15, 6))
     
     plt.subplot(1, 2, 1)
+<<<<<<< HEAD
     scatter1 = plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=y, 
                           cmap='tab10', alpha=0.7, s=10)
     plt.colorbar(scatter1, label='Class')
@@ -250,6 +280,18 @@ def main():
         
     except ImportError:
         print("Bokeh not installed. Install with: pip install bokeh")
+=======
+    plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=y, cmap='Spectral', s=5)
+    plt.title('t-SNE Visualization')
+    
+    plt.subplot(1, 2, 2)
+    plt.scatter(X_umap[:, 0], X_umap[:, 1], c=y, cmap='Spectral', s=5)
+    plt.title('UMAP Visualization')
+    
+    plt.tight_layout()
+    plt.savefig('tsne_umap_comparison.png')
+    plt.show()
+>>>>>>> student-branch
 
 if __name__ == "__main__":
     main()
