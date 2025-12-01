@@ -159,10 +159,12 @@ Goal: Synthesize all learned skills into a single, portfolio-worthy project that
 AI_ML_Curriculum/
 ├── Month1/
 │   ├── Week1/
-│   │   ├── README.md           # Main lesson content
-│   │   ├── glossary.md         # Key terms and definitions
-│   │   ├── exercises/          # Practice problems
-│   │   └── resources/          # Additional learning materials
+│   │   ├── cheatsheets/        # Quick reference guides
+│   │   ├── code labs/          # Hands-on coding sessions
+│   │   ├── dataset/            # Datasets for the week
+│   │   ├── lecture notes/      # Detailed notes and explanations
+│   │   ├── projects/           # Weekly projects
+│   │   └── readme/             # Main lesson content and weekly outline
 │   └── ...
 ├── Templates/                  # Document templates
 ├── Resources/                  # Shared resources
