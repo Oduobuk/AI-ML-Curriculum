@@ -139,3 +139,4 @@ print(response[0]['generated_text'])
 ## 5. Summary & Modern Takeaway
 * **LSTMs and traditional sequential text networks** are historical stepping stones; modern AI engineering is built entirely on the **Transformer self-attention mechanism**.
 * High-value AI systems combine **pretrained open/closed LLMs** with **high-precision Vector Search (RAG)** to provide grounded, real-time factual accuracy without retraining costs.
+
