@@ -1,236 +1,183 @@
-Week 1: Python Basics Cheatsheet
+# Month 0, Week 1 Cheatsheet: CPython Runtime Internals, Memory Layout & Data Structures
 
-Quick reference guide for Week 1 concepts.
+---
 
-📌 Variables & Data Types
+## 1. CPython Object Model Architecture (`PyObject`)
 
-```python
-Creating variables (assignment)
-name = "Alice"              # String
-age = 25                    # Integer
-height = 5.7                # Float
-is_student = True           # Boolean
+In CPython, every variable is a pointer to a heap-allocated `PyObject`.
 
-Check data type
-type(age)                   # <class 'int'>
-type("hello")               # <class 'str'>
+```
+                  Standard PyObject (64-bit Architecture)
+ 0                   16                  24                  32 bytes
+┌───────────────────┬───────────────────┬───────────────────┐
+│     ob_refcnt     │     ob_type       │    Extra fields   │
+│     (8 bytes)     │    (8 bytes)      │    (Payload...)   │
+│ uint64 reference  │ pointer to type   │                   │
+└───────────────────┴───────────────────┴───────────────────┘
+
+                  Variable-Length PyVarObject (e.g. tuple, list)
+ 0                   16                  24                  32 bytes
+┌───────────────────┬───────────────────┬───────────────────┬───────────────┐
+│     ob_refcnt     │     ob_type       │      ob_size      │ Array items.. │
+│     (8 bytes)     │    (8 bytes)      │ uint64 item count │ Pointers (8B) │
+└───────────────────┴───────────────────┴───────────────────┴───────────────┘
 ```
 
-| Type | Example | Use Case |
-|------|---------|----------|
-| `int` | 42, -5, 0 | Whole numbers |
-| `float` | 3.14, -2.5 | Decimals |
-| `str` | "hello", 'world' | Text |
-| `bool` | True, False | Yes/no values |
-
-🔢 Arithmetic Operators
-
+### Critical Memory Sizing Rules
 ```python
-Basic operations
-5 + 3         # 8 (addition)
-10 - 4        # 6 (subtraction)
-6 * 7         # 42 (multiplication)
-15 / 3        # 5.0 (division)
-17 // 5       # 3 (floor division)
-17 % 5        # 2 (modulo/remainder)
-2  3        # 8 (exponent/power)
+import sys
+
+sys.getsizeof(object())  # 16 bytes: base PyObject header (8B ob_refcnt + 8B ob_type)
+sys.getsizeof(0)         # 28 bytes: PyLongObject (16B header + 8B ob_size + 4B digit)
+sys.getsizeof("")        # 49-80 bytes: PyASCIIObject header + null terminator
+sys.getsizeof([])        # 56 bytes: empty list (header + capacity counter + pointer buffer)
+sys.getsizeof({})        # 64 bytes: compact hash table header (indices + entries)
 ```
 
-📝 String Operations
+---
 
+## 2. Integer Caching, Interning & Memory Pointers
+
+### Small Integer Cache (`[-5, 256]`)
+CPython pre-allocates an array of 312 singletons during runtime startup.
 ```python
-Concatenation (joining)
-"Hello" + " " + "World"     # "Hello World"
+a = 256
+b = 256
+a is b          # True (same physical address in small integer array)
 
-Repetition
-"Ha" * 3                    # "HaHaHa"
-
-Length
-len("Python")               # 6
-
-Case conversion
-"hello".upper()             # "HELLO"
-"HELLO".lower()             # "hello"
-
-Access individual character
-text = "Python"
-text[0]                     # "P" (first character)
-text[-1]                    # "n" (last character)
+x = 257
+y = 257
+x is y          # False in interactive REPL (distinct heap allocations)
+id(x) == id(y)  # False
 ```
 
-🖨️ Output: `print()` Function
-
+### String Interning Mechanics
+- String literals matching `[a-zA-Z0-9_]*` are automatically interned into `interned_dict`.
+- Dynamically created strings are not interned unless explicitly requested:
 ```python
-Simple output
-print("Hello, World!")
-
-Multiple values
-print("Name:", "Alice", "Age:", 25)
-
-Special characters
-print("Line 1\nLine 2")     # \n = newline
-print("Tab\there")         # \t = tab
-
-F-strings (Python 3.6+) - RECOMMENDED
-name = "Bob"
-age = 30
-print(f"My name is {name} and I'm {age}")
-
-Formatting with f-strings
-price = 19.99
-print(f"Price: ${price:.2f}")    # 2 decimal places
-print(f"Name: {name:<20}")       # Left align, 20 chars
-print(f"Age: {age:>5}")          # Right align, 5 chars
+import sys
+s1 = sys.intern("custom_token_" + str(42))
+s2 = sys.intern("custom_token_42")
+s1 is s2        # True (instant O(1) pointer comparison)
 ```
 
-⌨️ Input: `input()` Function
+---
 
+## 3. Data Structure Memory & Algorithmic Complexities
+
+| Data Structure | Underlying C Layout | Amortized Access | Amortized Insert | Memory Overhead |
+|:---|:---|:---|:---|:---|
+| **`list`** | Dynamic `PyObject**` array | $\mathcal{O}(1)$ | $\mathcal{O}(1)$ append / $\mathcal{O}(n)$ insert | Over-allocates by $\sim 12.5\%$ |
+| **`tuple`** | Fixed `PyObject*[]` buffer | $\mathcal{O}(1)$ | Immutable | Zero excess buffer |
+| **`deque`** | Doubly-linked block nodes (64 items) | $\mathcal{O}(n)$ random | $\mathcal{O}(1)$ head/tail push | Low memory fragmentation |
+| **`dict`** | Split-table / Compact hash table | $\mathcal{O}(1)$ avg | $\mathcal{O}(1)$ amortized | $2/3$ max load factor |
+| **`set`** | Flat open-addressing table | $\mathcal{O}(1)$ avg | $\mathcal{O}(1)$ amortized | Hash + key array |
+
+### List Over-Allocation Formula in CPython
+When resizing, CPython grows capacity via:
+$$\text{new\_allocated} = \text{new\_size} + (\text{new\_size} \gg 3) + (\text{new\_size} < 9 \mathrel{?} 3 : 6)$$
+
+---
+
+## 4. `__slots__` Optimization vs Default `__dict__`
+
+### Default Class Instance (`__dict__`)
 ```python
-Get user input (always returns string)
-name = input("Enter your name: ")
+class DefaultNode:
+    def __init__(self, x: float, y: float):
+        self.x = x
+        self.y = y
 
-Convert to number
-age = int(input("Enter your age: "))
-height = float(input("Enter your height: "))
+# Memory per instance: ~152 bytes (instance header + dict header + values array)
 ```
 
-🔄 Type Conversion
-
+### Slotted Class Instance (`__slots__`)
+Eliminates dynamic `__dict__`, storing fields directly at static struct offsets.
 ```python
-String to Integer
-int("42")                   # 42
-int("3.14")                 # Error! Can't convert with decimal
+class SlottedNode:
+    __slots__ = ("x", "y")
+    def __init__(self, x: float, y: float):
+        self.x = x
+        self.y = y
 
-String to Float
-float("3.14")               # 3.14
-float("42")                 # 42.0
-
-Number to String
-str(42)                     # "42"
-str(3.14)                   # "3.14"
-
-To Boolean
-bool(1)                     # True
-bool(0)                     # False
-bool("hello")               # True
-bool("")                    # False (empty string)
+# Memory per instance: ~48 bytes (68% RAM savings for 10M+ objects)
 ```
 
-💾 Variable Naming Rules
+---
 
-✅ Good Names:
-```python
-student_name = "Alice"
-birth_year = 2000
-heightincm = 170
-is_valid = True
+## 5. Garbage Collection & Reference Counting Mechanics
+
+```
+               Object Lifecycle Decision Tree
+                         ┌──────────────┐
+                         │ Object Born  │
+                         └──────┬───────┘
+                                │
+                        ob_refcnt == 0 ?
+                       ┌────────┴────────┐
+                       ▼                 ▼
+                     [YES]              [NO]
+               Deallocate via        Contained in
+               PyObject_Free()     Cyclic Reference?
+                                     ┌───┴───┐
+                                     ▼       ▼
+                                   [YES]    [NO]
+                               Tracked by  Remains in
+                                GC Gen 0   Memory
 ```
 
-❌ Bad Names:
-```python
-x = "Alice"                 # Unclear
-sn = "Alice"                # Confusing abbreviation
-123name = "Alice"           # Starts with number
-student name = "Alice"      # Contains space (invalid!)
-```
-
-🎯 Order of Operations (PEMDAS)
+### Cyclic Garbage Collector Tri-Color Generational Bounds
+- **Generation 0**: Allocations exceeding `threshold_0` triggers scan.
+- **Generation 1**: Surviving Gen 0 objects promoted.
+- **Generation 2**: Long-lived objects; full cycle collection.
 
 ```python
-Parentheses first
-result = (2 + 3) * 4        # 20
+import gc
 
-Then Exponents
-result = 2 + 3  2         # 11 (3² first, then add 2)
-
-Then *, /, //, %
-result = 2 + 3  4          # 14 (34 first, then add 2)
-
-Left to right for same precedence
-result = 10 / 2 * 5         # 25.0 (left to right)
+gc.get_threshold()          # (700, 10, 10)
+gc.collect()                # Force full generational collection
+gc.disable()                # Optimize batch ETL pipelines with no circular refs
 ```
 
-💬 Comments
+---
+
+## 6. Common Pitfalls & Debugging Playbook
+
+### Trap 1: Default Mutable Arguments
+```python
+# BUG: List is created once at function definition time in func.__defaults__
+def append_event(event, event_log=[]):
+    event_log.append(event)
+    return event_log
+
+# FIX: Use None sentinel pattern
+def append_event(event, event_log=None):
+    if event_log is None:
+        event_log = []
+    event_log.append(event)
+    return event_log
+```
+
+### Trap 2: In-Place Modification vs Rebidding
+```python
+a = [1, 2, 3]
+b = a
+a += [4]        # In-place extends a; b is also modified!
+a = a + [5]     # Allocates a new list; a and b diverge!
+```
+
+---
+
+## 7. High-Performance Memory Profiling Quick Commands
 
 ```python
-Single line comment
+import tracemalloc
 
-"""
-Multi-line comment
-for longer explanations
-"""
+tracemalloc.start()
+# Execute candidate ML memory workload...
+snapshot = tracemalloc.take_snapshot()
+top_stats = snapshot.statistics("lineno")
 
-x = 5  # Comment at end of line
+for stat in top_stats[:5]:
+    print(f"{stat.traceback}: {stat.size / 1024:.2f} KB (allocated {stat.count} objects)")
 ```
-
-🐛 Common Mistakes
-
-| Mistake | Wrong | Right |
-|---------|-------|-------|
-| Forgetting quotes | `print(Hello)` | `print("Hello")` |
-| Wrong operator | `"a" + 5` | `"a" + str(5)` |
-| No parentheses for function | `print "Hello"` | `print("Hello")` |
-| String + number | `age + 5` (if age is "25") | `int(age) + 5` |
-
-📋 Useful Functions Summary
-
-| Function | Purpose | Example |
-|----------|---------|---------|
-| `print()` | Display output | `print("Hello")` |
-| `input()` | Get user input | `name = input("Name: ")` |
-| `int()` | Convert to integer | `int("42")` |
-| `float()` | Convert to float | `float("3.14")` |
-| `str()` | Convert to string | `str(42)` |
-| `type()` | Check data type | `type(42)` |
-| `len()` | Get length | `len("hello")` |
-| `bool()` | Convert to boolean | `bool(1)` |
-
-🚀 Quick Program Template
-
-```python
-Step 1: Get input
-name = input("Enter your name: ")
-age = int(input("Enter your age: "))
-
-Step 2: Process/Calculate
-next_age = age + 1
-
-Step 3: Display output
-print(f"{name} will be {next_age} next year!")
-```
-
-📊 Common Patterns
-
-Temperature Conversion
-```python
-celsius = float(input("Temperature in Celsius: "))
-fahrenheit = (celsius * 9/5) + 32
-print(f"{celsius}°C = {fahrenheit}°F")
-```
-
-Area Calculation
-```python
-length = float(input("Length: "))
-width = float(input("Width: "))
-area = length * width
-print(f"Area: {area} square units")
-```
-
-BMI Calculation
-```python
-weight = float(input("Weight (lbs): "))
-height = float(input("Height (inches): "))
-bmi = (weight / (height  2)) * 703
-print(f"BMI: {bmi:.2f}")
-```
-
-🎓 Key Concepts to Remember
-
-- Variables store information
-- Data types determine what operations are valid
-- Functions perform actions (print, input, etc.)
-- Type conversion changes data types
-- F-strings format output nicely
-- Comments explain your code
-
-Need more help? Review the [Week 1 Lecture Notes](../lecturenotes/Week1Python_Basics.md)
