@@ -1,94 +1,141 @@
-# Week 3 Cheatsheet: Python Data Structures
-
-## Lists `[]`
-An **ordered**, **mutable** (changeable) collection of items.
-
-*   **Creation:** `my_list = ["apple", 10, True]`
-*   **Accessing:**
-    *   By index: `my_list[0]` -> `"apple"`
-    *   Negative index: `my_list[-1]` -> `True`
-    *   Slicing: `my_list[1:]` -> `[10, True]`
-*   **Key Methods:**
-    *   `.append(item)`: Adds an item to the end.
-    *   `.extend(another_list)`: Adds all items from another list to the end.
-    *   `.insert(index, item)`: Adds an item at a specific position.
-    *   `.remove(item)`: Removes the first occurrence of an item.
-    *   `.pop()`: Removes and returns the last item.
-    *   `.sort()`: Sorts the list in place.
-    *   `.reverse()`: Reverses the list in place.
-    *   `.index(item)`: Returns the index of the first occurrence of an item.
-    *   `.copy()`: Returns a shallow copy of the list.
+# Month 1, Week 3 Cheatsheet: High-Throughput Asynchronous Ingestion & Web Scraping
 
 ---
 
-## Tuples `()`
-An **ordered**, **immutable** (unchangeable) collection of items.
+## 1. Asynchronous Networking & Connection Pooling Architecture
 
-*   **Creation:** `my_tuple = ("apple", 10, True)`
-*   **Accessing:** Same as lists (index and slicing).
-    *   `my_tuple[0]` -> `"apple"`
-*   **Why use tuples?**
-    *   For data that should not change (e.g., coordinates, RGB color values).
-    *   Slightly more memory-efficient than lists.
-    *   Can be used as keys in a dictionary (lists cannot).
-*   **Unpacking:** A powerful feature for assigning tuple items to variables.
-    ```python
-    coordinates = (10, 20)
-    x, y = coordinates # x is 10, y is 20
-    ```
+```
+                  Async Ingestion Worker Pool Architecture
+                 ┌───────────────────────────────────────┐
+                 │          Target Web / API Pool        │
+                 └───────────────────▲───────────────────┘
+                                     │
+                        HTTP/2 Keep-Alive Connections
+                                     │
+                 ┌───────────────────┴───────────────────┐
+                 │       httpx.AsyncClient / aiohttp     │
+                 │   - Connection Pool: max_connections  │
+                 │   - Semaphore Gate: bounds in-flight  │
+                 └───────────────────▲───────────────────┘
+                                     │
+                     ┌───────────────┼───────────────┐
+                     ▼               ▼               ▼
+                [Worker 1]      [Worker 2]      [Worker 3]
+```
 
----
+### High-Performance `httpx` Client Setup
+```python
+import httpx
+import asyncio
 
-## Dictionaries `{}`
-An **unordered** collection of **key-value pairs**. Mutable.
+limits = httpx.Limits(
+    max_connections=100,            # Global TCP connection cap
+    max_keepalive_connections=20,   # Reusable warm sockets
+    keepalive_expiry=30.0           # Seconds before closing idle connections
+)
+timeout = httpx.Timeout(10.0, connect=3.0)
 
-*   **Creation:**
-    ```python
-    my_dict = {
-        "name": "John",
-        "age": 30,
-        "is_student": False
-    }
-    ```
-*   **Accessing Values:**
-    *   Using the key: `my_dict["name"]` -> `"John"` (will raise an error if the key doesn't exist).
-    *   Using the `.get()` method (safer): `my_dict.get("age")` -> `30`.
-    *   `.get()` with a default value: `my_dict.get("city", "Unknown")` -> `"Unknown"`.
-*   **Modifying and Adding:**
-    *   Add a new pair: `my_dict["city"] = "New York"`
-    *   Update an existing pair: `my_dict["age"] = 31`
-*   **Key Methods:**
-    *   `.keys()`: Returns a view of all keys.
-    *   `.values()`: Returns a view of all values.
-    *   `.items()`: Returns a view of all key-value pairs (as tuples).
+async with httpx.AsyncClient(limits=limits, timeout=timeout, http2=True) as client:
+    response = await client.get("https://api.internal/v1/stream")
+```
 
 ---
 
-## Control Flow
+## 2. Token Bucket Rate Limiting with Full Jitter
 
-*   **`if` / `elif` / `else`:** For making decisions.
-    ```python
-    if temperature > 30:
-        print("It's hot.")
-    elif temperature < 10:
-        print("It's cold.")
-    else:
-        print("It's nice.")
-    ```
-*   **`while` Loop:** Repeats a block of code as long as a condition is true.
-    ```python
-    i = 0
-    while i < 5:
-        print(i)
-        i += 1 # Don't forget to increment!
-    ```
-*   **`for` Loop (for iterating over collections):**
-    ```python
-    # Looping through a list
-    for friend in ["Jim", "Karen", "Kevin"]:
-        print(friend)
+To prevent HTTP 429 throttling and distributed anti-bot fingerprinting:
+$$\Delta t_k = \min(\text{max\_backoff}, \text{base\_delay} \times 2^{k-1}) + \text{Uniform}(0, \text{jitter})$$
 
-    # Looping through a dictionary's items
-    for key, value in my_dict.items():
-        print(f"{key}: {value}")
-    ```
+```python
+import time
+import asyncio
+import random
+
+class AsyncTokenBucket:
+    def __init__(self, rps: float, burst_capacity: float):
+        self.rate = rps
+        self.capacity = burst_capacity
+        self.tokens = burst_capacity
+        self.last_update = time.monotonic()
+        self.lock = asyncio.Lock()
+
+    async def acquire(self):
+        async with self.lock:
+            while True:
+                now = time.monotonic()
+                elapsed = now - self.last_update
+                self.last_update = now
+                self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
+                
+                if self.tokens >= 1.0:
+                    self.tokens -= 1.0
+                    return
+                # Non-blocking wait for deficit
+                deficit = 1.0 - self.tokens
+                await asyncio.sleep(deficit / self.rate + random.uniform(0.01, 0.05))
+```
+
+---
+
+## 3. High-Speed DOM Extraction with `lxml.html`
+
+`lxml` is written in C and parses malformed HTML $10\times$ faster than pure-Python parsers:
+```python
+from lxml import html
+
+tree = html.fromstring(raw_html_payload)
+
+# Fast XPath Expressions
+titles = tree.xpath('//div[contains(@class, "product-card")]//h3/text()')
+prices = tree.xpath('//span[@data-price]/@data-price')
+links  = tree.xpath('//a[contains(@href, "/item/")]/@href')
+
+# Clean text stripping
+clean_titles = [t.strip() for t in titles if t.strip()]
+```
+
+---
+
+## 4. Producer-Consumer Worker Queue with Dead-Letter Isolation
+
+```python
+import asyncio
+
+async def scraper_worker(in_queue: asyncio.Queue, dlq: asyncio.Queue, client: httpx.AsyncClient):
+    while True:
+        url, attempts = await in_queue.get()
+        try:
+            resp = await client.get(url)
+            if resp.status_code == 429:
+                retry_after = float(resp.headers.get("Retry-After", 1.0))
+                await asyncio.sleep(retry_after)
+                raise ConnectionError("Rate limited")
+            # Process success payload...
+        except Exception as exc:
+            if attempts < 3:
+                await in_queue.put((url, attempts + 1))
+            else:
+                await dlq.put({"url": url, "error": str(exc), "retries": attempts})
+        finally:
+            in_queue.task_done()
+```
+
+---
+
+## 5. Pydantic v2 Ingestion Contract
+
+```python
+from pydantic import BaseModel, Field, field_validator
+from datetime import datetime
+
+class IngestedDocument(BaseModel):
+    doc_id: str
+    url: str
+    title: str = Field(min_length=3)
+    content: str = Field(min_length=10)
+    ingested_at: datetime = Field(default_factory=datetime.utcnow)
+
+    @field_validator("title")
+    def sanitize_title(cls, v: str) -> str:
+        return v.strip().replace("\n", " ")
+```
