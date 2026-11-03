@@ -1,85 +1,86 @@
-# Month 2, Week 4 Cheatsheet: Boosting & Support Vector Machines (SVM)
-
-## 1. Boosting
-
-*   **Purpose:** Ensemble technique that combines multiple "weak learners" sequentially to form a single "strong learner." Focuses on correcting errors of previous models.
-*   **Sequential Training:** Models are trained one after another.
-*   **Bias Reduction:** Primarily aims to reduce bias and convert weak learners into strong ones.
-
-### a) AdaBoost (Adaptive Boosting)
-
-*   **Weak Learner:** Often uses decision stumps (decision trees with `max_depth=1`).
-*   **Mechanism:**
-    1.  Starts with equal weights for all training samples.
-    2.  Trains a weak learner.
-    3.  Increases weights of misclassified samples, decreases weights of correctly classified samples.
-    4.  Combines weak learners with weights based on their accuracy.
-*   **Focus:** Iteratively improves performance on hard-to-classify samples.
-
-### b) Gradient Boosting
-
-*   **Mechanism:** Builds new models that predict the **residuals (errors)** of prior models. Each new model is trained to minimize the loss function by moving in the direction of the negative gradient.
-*   **Generalization:** Highly flexible, can use various loss functions and weak learners.
-
-### c) Advanced Gradient Boosting Implementations
-
-*   **XGBoost (Extreme Gradient Boosting):**
-    *   Optimized, scalable, and efficient.
-    *   Includes regularization (L1/L2), parallel processing, tree pruning, and missing value handling.
-    *   Known for high performance and speed.
-*   **LightGBM:**
-    *   Uses tree-based learning algorithms.
-    *   Designed for speed and efficiency on large datasets (e.g., Gradient-based One-Side Sampling (GOSS), Exclusive Feature Bundling (EFB)).
-*   **CatBoost:**
-    *   Excels at handling categorical features automatically.
-    *   Uses ordered boosting to combat prediction shift.
+# Month 2, Week 4 Cheatsheet: Leak-Proof Preprocessing Pipelines, TreeSHAP & ONNX Runtime
 
 ---
 
-## 2. Support Vector Machines (SVM)
+## 1. Scikit-Learn `ColumnTransformer` Leak-Proof Architecture
 
-*   **Purpose:** Powerful supervised learning model for **classification**, regression, and outlier detection.
-*   **Key Idea:** Finds the optimal hyperplane that maximizes the margin between classes.
+Encapsulates all preprocessing into an atomic estimator to prevent train-test data leakage:
+```python
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import RobustScaler, TargetEncoder
+from sklearn.ensemble import HistGradientBoostingClassifier
 
-### a) Hyperplanes, Margins, and Support Vectors
+num_cols = ["age", "income", "transaction_amount"]
+cat_cols = ["merchant_category", "state"]
 
-*   **Hyperplane:** The decision boundary that separates different classes in the feature space.
-*   **Margin:** The distance between the hyperplane and the nearest data points (support vectors) of any class. SVM aims to maximize this distance.
-*   **Support Vectors:** The training data points closest to the hyperplane. They are critical for defining the hyperplane.
+preprocessor = ColumnTransformer(
+    transformers=[
+        ("num", Pipeline([("imputer", SimpleImputer(strategy="median")), ("scaler", RobustScaler())]), num_cols),
+        ("cat", TargetEncoder(smooth="auto", cv=5), cat_cols)
+    ]
+)
 
-### b) Linear SVM
+pipeline = Pipeline([
+    ("preprocessor", preprocessor),
+    ("classifier", HistGradientBoostingClassifier(random_state=42))
+])
 
-*   For **linearly separable data**, finds a straight hyperplane that maximizes the margin.
-
-### c) The Kernel Trick
-
-*   **Purpose:** Handles **non-linearly separable data**.
-*   **Mechanism:** Implicitly maps data into a higher-dimensional feature space where it becomes linearly separable, without explicit computation of new coordinates.
-*   **Kernel Functions:** Calculate the dot product in the higher-dimensional space directly from original coordinates.
-    *   **Polynomial Kernel:** `K(x, y) = (γ * (xᵀy) + r)ᵈ`
-    *   **Radial Basis Function (RBF) / Gaussian Kernel:** `K(x, y) = exp(-γ * ||x - y||²)`
-    *   **Sigmoid Kernel:** `K(x, y) = tanh(γ * (xᵀy) + r)`
-
-### d) Advantages of SVMs
-
-*   Effective in high-dimensional spaces.
-*   Memory efficient (uses only support vectors).
-*   Versatile with different kernel functions.
-
-### e) Disadvantages of SVMs
-
-*   Can be computationally expensive for very large datasets.
-*   Sensitive to choice of kernel and hyperparameters.
-*   Does not directly provide probability estimates.
+# Fitting strictly computes stats on X_train only!
+pipeline.fit(X_train, y_train)
+```
 
 ---
 
-## 3. Comparison: Bagging vs. Boosting
+## 2. Empirical Bayes Target Encoding with $m$-Estimate Smoothing
 
-| Feature       | Bagging (e.g., Random Forest)                               | Boosting (e.g., AdaBoost, Gradient Boosting)                               |
-| :------------ | :---------------------------------------------------------- | :------------------------------------------------------------------------- |
-| **Training**  | Parallel (models trained independently)                     | Sequential (models trained iteratively, each correcting previous errors)   |
-| **Goal**      | Reduces variance (by averaging diverse models)              | Reduces bias (by focusing on hard examples)                                |
-| **Weak Learners** | Often deep, complex trees (high variance, low bias)         | Often simple, shallow trees (decision stumps)                              |
-| **Data Weighting** | Each model sees a different bootstrap sample (equal weighting within sample) | Data is re-weighted or residuals are modeled (focus on misclassified samples) |
-| **Final Model** | Simple average/majority vote of predictions                 | Weighted average of predictions                                            |
+Replaces high-cardinality categorical levels with smoothed Bayesian prior targets:
+$$\hat{S}_c = \frac{n_c \bar{y}_c + m \mu_{\text{global}}}{n_c + m}$$
+- $n_c$: Frequency count of category $c$ in training set.
+- $\bar{y}_c$: Local empirical target mean for category $c$.
+- $\mu_{\text{global}}$: Global target mean across the entire training dataset.
+- $m$: Smoothing weight (pseudo-counts). When $n_c \to 0$, $\hat{S}_c \to \mu_{\text{global}}$ (prevents rare category overfitting).
+
+---
+
+## 3. TreeSHAP & Cooperative Game Theory Axioms
+
+SHAP computes additive feature attribution values satisfying four cooperative game theory axioms:
+$$f(x) = \phi_0 + \sum_{j=1}^M \phi_j(x)$$
+
+### The 4 Core Shapley Axioms
+1. **Efficiency**: $\sum_{j=1}^M \phi_j(x) = f(x) - \mathbb{E}[f(X)]$. The sum of local attributions exactly equals the difference between model output and baseline expected value.
+2. **Symmetry**: If $v(S \cup \{i\}) = v(S \cup \{j\})$ for all coalitions $S$, then $\phi_i = \phi_j$.
+3. **Dummy Player**: If $v(S \cup \{i\}) = v(S)$ for all $S$, then $\phi_i = 0$.
+4. **Additivity**: For ensemble $f + g$, $\phi_i(f + g) = \phi_i(f) + \phi_i(g)$.
+
+```python
+import shap
+
+explainer = shap.TreeExplainer(pipeline.named_steps["classifier"])
+shap_values = explainer(transformed_features)
+
+# Waterfall plot: Local sample explanation
+# Summary plot: Global feature importance
+```
+
+---
+
+## 4. Production ONNX Serialization & Sub-Millisecond Serving
+
+Compiles Python models into static computational graphs executed by optimized C++ runtimes:
+```python
+from skl2onnx import to_onnx
+import onnxruntime as ort
+
+# 1. Export Scikit-Learn pipeline to ONNX
+onnx_model = to_onnx(pipeline, X_train[:1])
+with open("/models/model.onnx", "wb") as f:
+    f.write(onnx_model.SerializeToString())
+
+# 2. Production Inference with ONNX Runtime
+session = ort.InferenceSession("/models/model.onnx")
+inputs = {session.get_inputs()[0].name: sample_data}
+probabilities = session.run(None, inputs)[1]  # Sub-millisecond latency
+```
