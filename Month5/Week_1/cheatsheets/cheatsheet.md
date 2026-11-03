@@ -1,54 +1,62 @@
-Cheatsheet: Fundamentals of Reinforcement Learning
-
- 1. The Reinforcement Learning Problem
-RL is about an agent learning to make optimal decisions by interacting with an environment.
-- The agent takes an action.
-- The environment returns a new state and a reward.
-- The agent's goal is to learn a policy (a strategy) that maximizes its cumulative reward over time.
+# Month 5, Week 1 Cheatsheet: Fine-Tuning, Parameter-Efficient Adaptation (PEFT) & QLoRA
 
 ---
 
- 2. Markov Decision Process (MDP)
-The mathematical framework for RL problems. An MDP consists of:
-- S: A set of all possible States.
-- A: A set of all possible Actions.
-- P: The Transition Probability Function. `P(s' | s, a)` is the probability of transitioning to state `s'` after taking action `a` in state `s`.
-- R: The Reward Function. `R(s, a, s')` is the immediate reward for transitioning from `s` to `s'` via action `a`.
-- γ (Gamma): The Discount Factor (0 ≤ γ < 1). It determines the importance of future rewards. A value of 0 makes the agent short-sighted, while a value near 1 makes it strive for long-term rewards.
+## 1. Parameter-Efficient Fine-Tuning: LoRA Mathematics
 
-The Markov Property: The future is independent of the past, given the present. The current state `s` contains all necessary information for the agent to make a decision.
-
----
-
- 3. Policies and Value Functions
-- Policy (π): The agent's strategy or "brain". It maps states to actions. `π(a|s)` is the probability of taking action `a` in state `s`. The goal of RL is to find the optimal policy, `π`.
-- State-Value Function (V(s)): The expected total reward starting from state `s` and then following a policy `π`. "How good is it to be in this state?"
-- Action-Value Function (Q(s, a)): The expected total reward starting from state `s`, taking action `a`, and then following a policy `π`. "How good is it to take this action in this state?"
+Standard full fine-tuning modifies $W_0 \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$, updating all $d_{\text{in}} \times d_{\text{out}}$ weights. LoRA freezes $W_0$ and decomposes updates into low-rank matrices:
+$$h = W_0 x + \Delta W x = W_0 x + \frac{\alpha}{r} (B A) x$$
+where:
+- $A \in \mathbb{R}^{r \times d_{\text{in}}}$: Initialized with Gaussian noise $\mathcal{N}(0, \sigma^2)$.
+- $B \in \mathbb{R}^{d_{\text{out}} \times r}$: Initialized to **exact zero** (ensures $\Delta W = 0$ on step 0).
+- $r \ll \min(d_{\text{in}}, d_{\text{out}})$: Intrinsic adapter rank (typically $8 - 64$).
+- $\frac{\alpha}{r}$: Constant scaling factor ensuring stable gradient steps when varying rank $r$.
 
 ---
 
- 4. Value-Based Methods: Q-Learning
-These methods learn a value function (typically the Q-function) and then derive a policy from it.
+## 2. QLoRA: NormalFloat-4 (NF4) & Double Dequantization
 
- Q-Learning
-- Model-Free: It doesn't need to know the transition probabilities (P) or reward function (R).
-- Off-Policy: It can learn the optimal policy even while following a different, exploratory policy.
-- Q-Table: For discrete state/action spaces, this is a simple lookup table storing the Q-value for every `(state, action)` pair.
-- The Bellman Update Equation: The core of Q-learning. It iteratively updates the Q-table.
-  `Q(s, a) ← Q(s, a) + α  [r + γ  max_a' Q(s', a') - Q(s, a)]`
-    - `α` (alpha) is the learning rate.
+QLoRA (Dettmers et al. 2023) enables 4-bit fine-tuning of 70B models on a single GPU:
 
- Exploration vs. Exploitation
-- Exploration: Trying new actions to discover potentially better rewards.
-- Exploitation: Choosing the action known to give the best reward.
-- Epsilon-Greedy Strategy: A common way to balance this. With probability `ε` (epsilon), choose a random action (explore). Otherwise, choose the best-known action (exploit). `ε` often decays over time.
+```
+                      QLoRA Memory Architecture
+ ┌────────────────────────────────────────────────────────┐
+ │ 4-Bit NormalFloat Base Weights (NF4)                   │  Frozen base weights
+ ├────────────────────────────────────────────────────────┤  (Saves 75% VRAM)
+ ├───────────────────┬────────────────────────────────────┤
+ │ LoRA Adapter A    │ LoRA Adapter B                     │  Trainable FP16 / BF16
+ │ (rank r=16)       │ (rank r=16)                        │  (< 1% of total params)
+ └───────────────────┴────────────────────────────────────┘
+```
+
+### NormalFloat-4 (NF4) Information Density
+- Weights follow a normal distribution $\mathcal{N}(0, \sigma^2)$.
+- NF4 quantiles are derived such that each discrete 4-bit bin contains identical probability mass $\frac{1}{16}$, maximizing information entropy compared to uniform INT4.
+- **Double Dequantization**: Quantizes the 32-bit quantization constants down to 8-bit, saving an additional 0.37 bits per parameter.
 
 ---
 
- 5. Policy-Based Methods: Policy Gradients
-These methods directly learn the parameters of the policy `π(a|s; θ)` without needing to learn a value function first.
+## 3. Production Weight Merging for Zero-Overhead Inference
 
-- Core Idea: Adjust the policy's parameters `θ` in the direction that makes actions leading to high rewards more likely.
-- REINFORCE Algorithm: A foundational policy gradient algorithm. It uses the return from an entire episode to update the policy.
-- Advantage: Policy gradient methods can handle continuous action spaces and learn stochastic policies naturally.
-- Disadvantage: Often have high variance in gradient estimates, which can make training unstable. This is often addressed by using a baseline or Actor-Critic methods.
+During serving, eliminate adapter matrix latency by folding weights into base parameters:
+$$W_{\text{serving}} = W_0 + \frac{\alpha}{r} (B A)$$
+
+```python
+from peft import AutoPeftModelForCausalLM
+
+# Load trained adapter
+model = AutoPeftModelForCausalLM.from_pretrained("/checkpoints/lora_adapter")
+# Merge adapter weights directly into base FP16 weights
+merged_model = model.merge_and_unload()
+merged_model.save_pretrained("/models/fused_production_model")
+```
+
+---
+
+## 4. Supervised Fine-Tuning (SFT) Masked Loss Labeling
+
+Only calculate cross-entropy loss on the assistant's generated completion tokens:
+```python
+# System + User prompt tokens set to label -100 (ignored by PyTorch CrossEntropyLoss)
+labels = [-100] * len(prompt_tokens) + completion_tokens
+```

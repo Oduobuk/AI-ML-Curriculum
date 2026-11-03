@@ -1,36 +1,69 @@
-Month 5, Week 3: Explainable & Responsible AI Cheatsheet
+# Month 5, Week 3 Cheatsheet: LLM Observability, OpenTelemetry & Continuous Evaluation
 
- Explainable AI (XAI)
+---
 
- Key Concepts
+## 1. OpenTelemetry (OTel) GenAI Semantic Conventions
 
-| Term | Description |
-| :--- | :--- |
-| Interpretability | The degree to which a human can understand the cause and effect of a model's internal workings. |
-| Explainability | The degree to which a human can understand the reasoning behind a specific decision made by a model. |
-| Black Box Model | A complex model (e.g., deep neural network, gradient boosting) whose internal workings are not easily understood. |
-| Local Explanation | Explaining a single prediction made by the model. |
-| Global Explanation | Understanding the overall behavior of the model as a whole. |
+Standardized tracing attributes for monitoring foundational model invocations:
 
- XAI Techniques
+| Semantic Attribute Key | Type | Description | Example Value |
+|:---|:---|:---|:---|
+| `gen_ai.system` | `string` | Target inference provider | `"openai"`, `"anthropic"`, `"vllm"` |
+| `gen_ai.request.model` | `string` | Target model name | `"llama-3-70b-instruct"` |
+| `gen_ai.request.temperature` | `double` | Generation temperature | `0.7` |
+| `gen_ai.usage.prompt_tokens` | `int` | Input token count | `124` |
+| `gen_ai.usage.completion_tokens` | `int` | Output generated tokens | `48` |
+| `gen_ai.response.finish_reasons` | `string[]` | Stop reason array | `["stop"]`, `["length"]` |
 
-| Technique | Type | Description |
-| :--- | :--- | :--- |
-| LIME (Local Interpretable Model-agnostic Explanations) | Local, Model-agnostic | Approximates a black-box model locally with a simpler, interpretable model (e.g., linear regression) to explain a single prediction. |
-| SHAP (SHapley Additive exPlanations) | Local & Global, Model-agnostic | Uses game theory to calculate the contribution of each feature to a prediction. Can be aggregated for global explanations. |
-| Feature Importance | Global, Model-specific | A score that indicates how important each feature is for the model's predictions. Often available in tree-based models. |
-| Partial Dependence Plots (PDP) | Global, Model-agnostic | Shows the marginal effect of one or two features on the predicted outcome of a model. |
-| Individual Conditional Expectation (ICE) Plots | Local, Model-agnostic | A more granular version of PDP that shows the effect of a feature on the prediction for a single instance. |
+---
 
- Responsible AI
+## 2. Continuous Evaluation: G-Eval Logit Expectation Scoring
 
- Core Principles
+Eliminates discrete rounding variance in LLM-as-a-judge evaluations:
+$$E[\text{Score}] = \sum_{s=1}^5 s \times P(\text{Token}=s) = \sum_{s=1}^5 s \times \frac{\exp(L_s)}{\sum_{j=1}^5 \exp(L_j)}$$
+where $L_s$ is the raw unnormalized logit of score token $s \in \{1, 2, 3, 4, 5\}$.
 
-| Principle | Description | Key Considerations |
-| :--- | :--- | :--- |
-| Fairness | Ensuring that a model's predictions are not biased against certain groups or individuals. | Unbiased data, fairness metrics (e.g., demographic parity, equalized odds), bias mitigation techniques. |
-| Accountability | Establishing clear lines of responsibility for the outcomes of AI systems. | Audits, impact assessments, clear documentation, human oversight. |
-| Transparency | Making the workings and decisions of an AI system understandable to its users and stakeholders. | Explainability (XAI), clear communication about model capabilities and limitations. |
-| Privacy | Protecting the sensitive data of individuals used in AI systems. | Data anonymization, differential privacy, secure data handling. |
-| Safety & Robustness | Ensuring that an AI system operates reliably and is resistant to adversarial attacks. | Rigorous testing, adversarial training, monitoring for performance degradation. |
-| Human-in-the-loop | Incorporating human oversight and intervention in AI systems. | Mechanisms for users to appeal or correct model decisions. |
+```python
+import numpy as np
+
+def compute_geval_expectation(score_logits: dict[int, float]) -> float:
+    scores = np.array(list(score_logits.keys()))
+    logits = np.array(list(score_logits.values()))
+    
+    # Stable softmax
+    exp_logits = np.exp(logits - np.max(logits))
+    probs = exp_logits / np.sum(exp_logits)
+    
+    return float(np.sum(scores * probs))
+```
+
+---
+
+## 3. Production Prometheus Instrumentation
+
+Standard metric exports for enterprise LLM gateways:
+```python
+from prometheus_client import Counter, Histogram
+
+# 1. Total request count partitioned by status
+LLM_REQUESTS = Counter(
+    "llm_requests_total", 
+    "Total LLM gateway requests", 
+    ["model", "status"]
+)
+
+# 2. Token consumption velocity
+LLM_TOKENS = Counter(
+    "llm_token_count_total", 
+    "Total tokens consumed", 
+    ["model", "type"]  # type: 'prompt' or 'completion'
+)
+
+# 3. Request latency distribution
+LLM_LATENCY = Histogram(
+    "llm_latency_seconds", 
+    "End-to-end request latency", 
+    ["model"],
+    buckets=[0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+)
+```
