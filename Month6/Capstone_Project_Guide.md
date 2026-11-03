@@ -1,108 +1,120 @@
- A Guide to Your Month 6 Capstone Project: From Idea to Deployment
+# Month 6: Capstone Engineering Studio (2026 Edition)
 
-Welcome to your final month! The capstone project is the culmination of everything you have learned. Your goal is not just to build an accurate model, but to build a complete, end-to-end machine learning system. A simple project that is well-engineered and deployed is far more valuable than a complex model that only exists in a notebook.
-
-Focus on the process. Adhering to the MLOps principles taught in Month 5 is as important as the final result.
-
----
-
-Week 1: Foundation and Planning (The Most Critical Week)
-
-Your goal this week is to establish a rock-solid foundation. Rushing this step is the most common reason projects fail.
-
-1. Choosing Your Project
--   Follow Your Interest: Pick a problem you are genuinely curious about. You will be more motivated to work on it. Look for ideas on Kaggle, in your personal hobbies, or from real-world problems you've noticed.
--   Confirm Data Availability First: Before committing to an idea, ensure you have access to a suitable dataset. No data, no project.
-
-2. Defining Your Scope
--   Define a Minimum Viable Product (MVP): This is crucial. Ask yourself: "What is the absolute simplest version of this project that can work end-to-end?" For example, if your goal is a multi-class image classifier, your MVP might be a binary classifier for the two most common classes.
--   Set Clear Success Criteria: How will you measure success? Be specific.
-    -   Bad: "Build a good model."
-    -   Good: "Achieve > 85% accuracy on the test set for the binary classification task."
-    -   Good: "Deploy a web API with a prediction latency of < 500ms."
-
-3. Industry Best Practice: Git and GitHub from Day One
-This is a non-negotiable requirement for a reason. It provides version control, a foundation for collaboration, and enables CI/CD automation.
-
-Your Action Plan for Week 1:
-1.  Create a new, public repository on GitHub.
-2.  Clone it to your local machine.
-3.  Create a .gitignore file immediately to exclude datasets, environment files (.env), and Python caches (__pycache__/).
-4.  Initialize your branching strategy. We recommend the Adapted GitFlow model from Month 5:
-    ```bash
-     Create the main development branch
-    git checkout -b develop
-
-     Start your initial setup on a new experiment branch
-    git checkout -b experiment/initial-setup
-    ```
-5.  Write your complete project proposal (problem statement, scope, objectives, data source, success criteria) in the README.md file.
-6.  Make your first commit and push your branches to GitHub.
+```
+================================================================================
+COURSE:    AI & LLM SYSTEMS ENGINEERING (2026 EDITION)
+MODULE:    MONTH 6: CAPSTONE ENGINEERING STUDIO
+FOCUS:     ENTERPRISE-GRADE PRODUCTION AI SYSTEM IMPLEMENTATION & DEFENSE
+DELIVERABLE: END-TO-END REPOSITORY, TECHNICAL RFC, CONTAINERIZED DEPLOYMENT & EVALS
+TARGET:    PORTFOLIO-READY SENIOR AI SYSTEMS ARCHITECT
+================================================================================
+```
 
 ---
 
-Week 2: Data, Exploration, and Baselines
+## 1. Executive Overview & Capstone Mission
 
-This week is about understanding your data and setting a benchmark.
+The **Month 6 Capstone Engineering Studio** is the culminating practical milestone of the 7-month curriculum. Rather than building toy academic demonstrators or generic tutorial wrappers, every student is required to design, implement, benchmark, and deploy an **enterprise-grade, production-hardened AI system**.
 
-1. Data Acquisition and EDA
--   Reproducible Cleaning: Perform your data cleaning and preprocessing in a script or a clean notebook. A future teammate (or you, in six months) should be able to re-run it and get the exact same result.
--   EDA with a Purpose: Your Exploratory Data Analysis should lead to hypotheses. Don't just create plots; interpret them. (e.g., "Feature X has a long-tailed distribution; applying a log transform might help the model.")
-
-2. Industry Best Practice: Establish a Baseline with MLflow
-A baseline model is your "floor." If your complex neural network can't outperform a simple LogisticRegression, you know something is wrong. MLflow is essential for tracking your progress.
-
-Your Action Plan for Week 2:
-1.  Set up MLflow.
-2.  Build the simplest possible baseline model (e.g., LogisticRegression for classification, LinearRegression for regression, or even a simple heuristic).
-3.  Create your first MLflow experiment. In a script, use mlflow.start_run() to log the baseline's performance.
-4.  Log Everything: Use mlflow.log_param(), mlflow.log_metric(), and mlflow.log_artifact() to save your results. This first run is the benchmark that all future, more complex models must beat.
+A successful capstone project proves mastery across the entire 2026 AI systems lifecycle:
+1. **Algorithmic Rigor**: Custom mathematical implementations (custom autograd VJPs, quantized inference, or specialized retrieval scoring).
+2. **Production Systems Architecture**: Zero-downtime serving using **vLLM**, **LangGraph**, **FastAPI**, and **Qdrant**, with sub-second latency SLAs.
+3. **Enterprise Reliability**: Comprehensive automated test coverage ($>80\%$), continuous OpenTelemetry distributed tracing, deterministic guardrails, and quantitative evaluation (Ragas / G-Eval).
+4. **Professional Engineering Hygiene**: Strict type hints (Python 3.11+ / Pydantic v2), multi-stage Docker builds, and formal Architectural Decision Records (ADRs).
 
 ---
 
-Week 3: Iterative Model Development
+## 2. Four Specialized Engineering Tracks
 
-This week is about experimentation, driven by a structured process.
+Students select **ONE** primary specialization track for their capstone:
 
-1. The Experimentation Mindset
--   Use your branching strategy! Each new idea should be a new branch.
-    ```bash
-     Finished with the baseline, now try a more complex model
-    git checkout develop
-    git checkout -b experiment/try-xgboost-model
-    ```
--   This isolates your work and keeps your develop branch clean. If an experiment fails, you simply discard the branch.
+```mermaid
+flowchart TD
+    ROOT["Month 6: Capstone Engineering Studio"] --> T1["Track 1: Autonomous Multi-Agent<br>Enterprise Automation"]
+    ROOT --> T2["Track 2: Production Hybrid RAG<br>& Knowledge Intelligence"]
+    ROOT --> T3["Track 3: Domain-Adapted Foundation<br>LLM & Fast Quantized Serving"]
+    ROOT --> T4["Track 4: Real-Time Edge Vision<br>& Embedded Perception"]
 
-2. Industry Best Practice: Rigorous Experiment Tracking
-This is what separates a professional from an amateur. Every training run should be logged in MLflow so you can compare results and justify your decisions.
+    style ROOT fill:#0f172a,color:#ffffff,stroke:#3b82f6,stroke-width:3px;
+    style T1 fill:#f8fafc,stroke:#3b82f6,stroke-width:2px;
+    style T2 fill:#f8fafc,stroke:#10b981,stroke-width:2px;
+    style T3 fill:#f8fafc,stroke:#f59e0b,stroke-width:2px;
+    style T4 fill:#f8fafc,stroke:#8b5cf6,stroke-width:2px;
+```
 
-Your Action Plan for Week 3:
-1.  For every experiment, wrap your training code in an mlflow.start_run().
-2.  Log all relevant parameters, metrics, and model artifacts. Use descriptive names for your runs.
-3.  Use the MLflow UI to compare experiments. Make data-driven decisions about which model, features, and hyperparameters perform best.
-4.  Once an experiment yields a superior model, merge that experiment/ branch back into develop.
+### Track 1: Autonomous Multi-Agent Enterprise Automation
+- **Focus**: Building self-correcting, multi-agent systems that solve complex, multi-step asynchronous workflows.
+- **Required Stack**: LangGraph, Model Context Protocol (MCP), Pydantic v2, PostgreSQL / SQLite Checkpointer, Langfuse.
+- **Exemplar Project**: *Autonomous SRE Incident Remediation & GitOps Agent* (Diagnoses Kubernetes alerts, inspects logs via MCP, drafts PR fixes, requires human Slack approval).
+
+### Track 2: Production Hybrid RAG & Knowledge Intelligence
+- **Focus**: Zero-hallucination semantic retrieval over massive heterogeneous document corpora.
+- **Required Stack**: Qdrant Vector Engine, BM25 / SPLADE, Cross-Encoder Re-Ranking, Ragas Evaluation Triad, NeMo Guardrails.
+- **Exemplar Project**: *SEC Financial Compliance & Legal Discovery Assistant* (Processes 100k SEC 10-K filings, executes hybrid RRF search, enforces tenant isolation, guarantees $<0.1\%$ hallucination).
+
+### Track 3: Domain-Adapted Foundation LLM & High-Throughput Serving
+- **Focus**: Fine-tuning an open-weights foundation model on specialized domain syntax and deploying an optimized serving engine.
+- **Required Stack**: PyTorch 2.x, QLoRA (NF4), Unsloth / Hugging Face PEFT, vLLM (PagedAttention), FastAPI SSE.
+- **Exemplar Project**: *Text-to-SQL Compiler for Complex Enterprise Schemas* (Fine-tunes Llama-3-8B with QLoRA on complex SQL dialects, serves via vLLM with continuous batching at $>80\text{ tokens/sec}$).
+
+### Track 4: Real-Time Edge Vision & Embedded Perception
+- **Focus**: High-speed, low-latency computer vision deployed on resource-constrained hardware.
+- **Required Stack**: PyTorch 2.x, Anchor-Free YOLO / ConvNeXt, ONNX Runtime, NVIDIA TensorRT (INT8 PTQ), OpenCV.
+- **Exemplar Project**: *Autonomous Drone Obstacle Avoidance & Defect Scanner* (60 FPS inference at P99 $<5\text{ ms}$ on NVIDIA Jetson / Apple Silicon with zero aspect-ratio warping).
 
 ---
 
-Week 4: Deployment and Communication
+## 3. Four-Week Capstone Engineering Milestones
 
-This is where you bring it all together and showcase your work.
+```
++---------------------------------------------------------------------------------------------------+
+|                            4-WEEK CAPSTONE IMPLEMENTATION ROADMAP                                 |
++---------------------------------------------------------------------------------------------------+
+|  Week 1: RFC & Architecture Design                                                                |
+|       - Author formal Technical Design Document (RFC) and Architectural Decision Records (ADRs)   |
+|       - Establish repository scaffolding, linting, CI/CD, and dataset validation                  |
+|       |                                                                                           |
+|       v                                                                                           |
+|  Week 2: Core Algorithm & Engine Implementation                                                  |
+|       - Build the algorithmic core (from-scratch components, model fine-tuning, or HNSW indexing) |
+|       - Achieve initial baseline benchmark results                                                |
+|       |                                                                                           |
+|       v                                                                                           |
+|  Week 3: Serving Gateway, Telemetry & Guardrails                                                  |
+|       - Wrap engine in asynchronous FastAPI gateway with Server-Sent Events (SSE) streaming       |
+|       - Instrument OpenTelemetry traces and Prometheus metric collectors                          |
+|       - Integrate deterministic safety guardrails and input validation                            |
+|       |                                                                                           |
+|       v                                                                                           |
+|  Week 4: Stress Testing, Containerization & Final Defense                                         |
+|       - Execute locust / k6 concurrent load testing (measuring P99 latency, TTFT, and ITL)        |
+|       - Author multi-stage production Dockerfile and container compose manifests                  |
+|       - Deliver live technical defense and portfolio demonstration                                |
++---------------------------------------------------------------------------------------------------+
+```
 
-1. Industry Best Practice: Containerize and Deploy
-A model is not "done" until it is usable by others. Deployment is a critical skill.
+---
 
-Your Action Plan for Week 4:
-1.  Create an API: Wrap your best-performing model in a web API. We strongly recommend using FastAPI for its high performance and automatic interactive documentation (Swagger UI).
-2.  Write a Dockerfile: Package your FastAPI application, your trained model artifact, and all dependencies into a Docker container.
-3.  Test Locally: Build and run your Docker container on your machine to ensure it works perfectly.
-4.  Deploy: Push your container to a cloud service.
-    -   Recommended: Google Cloud Run or Heroku are excellent, easy-to-use options for deploying single containers.
-    -   Advanced: If you feel confident, apply your IaC and K8s knowledge from Month 5 to deploy your container on a managed Kubernetes service (like GKE or EKS).
+## 4. Production Acceptance Criteria & Defense Rubric
 
-2. Documentation and Presentation
--   Perfect Your README.md: This is the front door to your project. It must be excellent. It.
-    -   A clear project title and problem statement.
-    -   A link to your live, deployed application.
-    -   Instructions on how to set up and run the project locally.
-    -   A summary of your results and key findings.
--   Prepare Your Presentation: Your final presentation should focus on a live demo of the deployed application. Walk through the project's purpose, your process, and show the model making predictions in real-time.
+Every capstone submission is rigorously evaluated across 5 core dimensions:
+
+| Dimension | Weight | Criteria for Distinction (Grade: A / Senior AI Engineer Standard) |
+| :--- | :---: | :--- |
+| **1. Architecture & Design** | 20% | Clear separation of concerns; formal RFC and ADRs included; no tight coupling; mathematically sound algorithm selection. |
+| **2. Algorithmic Implementation** | 25% | Core algorithmic mechanisms clearly understood and implemented (not just a 3-line library import); proper tensor handling; zero memory leaks. |
+| **3. Reliability & Guardrails** | 20% | Automated unit and integration tests ($>80\%$ coverage); deterministic input/output guardrails; graceful error handling and retry policies. |
+| **4. Serving & Production Hygiene** | 20% | Non-blocking asynchronous FastAPI endpoints; SSE streaming; multi-stage non-root Dockerfile; OpenTelemetry distributed traces. |
+| **5. Empirical Evaluation** | 15% | Quantitative benchmarking (mAP, Ragas, TTFT, ITL, or perplexity); load testing results documented; clear cost/latency trade-off analysis. |
+
+---
+
+## 5. Mandatory Deliverables Checklist
+
+- [ ] **Repository Structure**: Clean, modular layout (`src/`, `tests/`, `config/`, `docker/`).
+- [ ] **Technical RFC**: Comprehensive markdown document specifying problem statement, system boundaries, alternatives considered, and mathematical formulations.
+- [ ] **Automated Test Suite**: Pytest suite covering core modules with mock fixtures and $>80\%$ test coverage.
+- [ ] **Docker Artifact**: Fully reproducible, multi-stage `Dockerfile` running as unprivileged user with health checks.
+- [ ] **Telemetry Dashboard**: Running OpenTelemetry traces (Langfuse) and Prometheus metrics.
+- [ ] **Live Demo / Screencast**: A 5-minute technical demonstration showcasing real-time execution, error recovery, and load performance.
+
