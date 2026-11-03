@@ -49,3 +49,4 @@ By the end of Month 1, students will:
 | **Week 2** | [Notes](Week_2/lecture_notes/Week_2_Production_SQL_for_AI.md) | [Exercises](Week_2/exercises/Week2_Exercises.md) | [Assignment](Week_2/assignments/Week2_Assignment.md) | [Cheatsheet](Week_2/cheatsheets/Week2_Cheatsheet.md) |
 | **Week 3** | [Notes](Week_3/lecture_notes/Week_3_Data_Ingestion_APIs_and_Scraping.md) | [Exercises](Week_3/exercises/Week3_Exercises.md) | [Assignment](Week_3/assignments/Week3_Assignment.md) | [Cheatsheet](Week_3/cheatsheets/Week3_Cheatsheet.md) |
 | **Week 4** | [Notes](Week_4/lecture_notes/Week_4_EDA_and_Interactive_Dashboards.md) | [Exercises](Week_4/exercises/Week4_Exercises.md) | [Assignment](Week_4/assignments/Week4_Assignment.md) | [Cheatsheet](Week_4/cheatsheets/Week4_Cheatsheet.md) |
+
