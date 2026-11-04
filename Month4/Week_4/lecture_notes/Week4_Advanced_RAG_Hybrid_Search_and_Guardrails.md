@@ -140,6 +140,9 @@ The fundamental architectural difference between initial dense retrieval (Bi-Enc
 
 ### 3.2. Hybrid Reciprocal Rank Fusion (RRF) Pipeline
 
+![Advanced RAG Architecture](../../../docs/images/rag_architecture.png)
+*Figure 3.1: Modern multi-stage enterprise RAG architecture showing query routing, hybrid retrieval (dense semantic + sparse lexical), Reciprocal Rank Fusion (RRF), Cross-Encoder re-ranking, and response synthesis with guardrails.*
+
 ```
            User Query
                |
