@@ -1,63 +1,73 @@
-# Book References for AI/ML Curriculum
+# Master Reference Library: Canonical AI & ML Engineering Textbooks (2026 Edition)
 
-## Core Textbooks
-1. **Hands-On Machine Learning with Scikit-Learn, Keras, and TensorFlow** by Aurélien Géron
-   - Primary text for most of the course
-   - Covers ML fundamentals, neural networks, DL, and deployment
+This reading list provides the authoritative technical references grounding every module of the **7-month Applied AI & LLM Systems Engineering Curriculum**. Every lecture note directly cites chapters and theorems from these canonical texts.
 
-2. **Deep Learning** by Ian Goodfellow, Yoshua Bengio, and Aaron Courville
-   - Comprehensive reference for deep learning concepts
-   - Good for advanced topics and theory
+---
 
-3. **Pattern Recognition and Machine Learning** by Christopher Bishop
-   - Strong theoretical foundation
-   - Excellent for understanding the mathematics behind ML algorithms
+## 🏛️ Foundational Classics & Theory
+1. **Artificial Intelligence: A Modern Approach (4th Edition, 2020)**
+   * *Authors:* Stuart Russell & Peter Norvig
+   * *Curriculum Role:* Month 0 & Month 1 AI context, search algorithms, probability, logic agents.
+2. **Deep Learning (2016)**
+   * *Authors:* Ian Goodfellow, Yoshua Bengio, & Aaron Courville (MIT Press)
+   * *Curriculum Role:* Deep Learning math, backpropagation proofs, optimization dynamics, autoencoders.
+3. **Pattern Recognition and Machine Learning (2006)**
+   * *Author:* Christopher M. Bishop (Springer)
+   * *Curriculum Role:* Month 2 & 3 Bayesian formulations, Gaussian mixtures, probability density estimation.
+4. **An Introduction to Statistical Learning: with Applications in Python (ISLP, 2023)**
+   * *Authors:* Gareth James, Daniela Witten, Trevor Hastie, Robert Tibshirani, Jonathan Taylor
+   * *Curriculum Role:* Month 2 Supervised learning, bias-variance tradeoff, tree pruning, regularized linear models.
 
-4. **Artificial Intelligence: A Modern Approach** by Stuart Russell and Peter Norvig
-   - Broad AI concepts
-   - Good for foundational AI knowledge
+---
 
-## Month 1: Foundations
-- **Python for Data Analysis** by Wes McKinney
-  - Essential for Pandas and data manipulation
-- **Automate the Boring Stuff with Python** by Al Sweigart
-  - Good for Python beginners
-- **SQL in 10 Minutes** by Ben Forta
-  - Quick reference for SQL basics
+## 🚀 Applied Machine Learning & High-Performance Data
+5. **Python for Data Analysis (3rd Edition, 2022)**
+   * *Author:* Wes McKinney (Creator of Pandas) (O'Reilly)
+   * *Curriculum Role:* Month 1 data structures, array manipulation, and tabular workflows.
+6. **Polars Cookbook: Practical recipes for fast data manipulation (2024)**
+   * *Curriculum Role:* Month 1 modern columnar memory, Apache Arrow, and sub-second tabular query optimization.
+7. **Designing Data-Intensive Applications (DDIA)**
+   * *Author:* Martin Kleppmann (O'Reilly)
+   * *Curriculum Role:* Month 1 & Month 5 database internals, indexes, partitions, streaming, and distributed systems.
+8. **Hands-On Machine Learning with Scikit-Learn, Keras, and TensorFlow (3rd Edition, 2022)**
+   * *Author:* Aurélien Géron (O'Reilly)
+   * *Curriculum Role:* Month 2 & Month 3 end-to-end ML pipelines, ensemble boosting, scikit-learn best practices.
 
-## Month 2: Supervised Learning
-- **An Introduction to Statistical Learning** by James, Witten, Hastie, and Tibshirani
-  - Excellent theoretical foundation for ML algorithms
+---
 
-## Month 3: Unsupervised Learning
-- **Machine Learning: A Probabilistic Perspective** by Kevin P. Murphy
-  - Strong coverage of probabilistic approaches
+## 🔥 Modern PyTorch & Deep Learning
+9. **Deep Learning with PyTorch (2nd Edition, 2024/2025)**
+   * *Authors:* Eli Stevens, Luca Antiga, Thomas Viehmann, Howard Huang (Manning)
+   * *Curriculum Role:* Month 3 PyTorch computational graphs, `autograd`, custom datasets, and CUDA/MPS memory management.
+10. **Vision Transformers and Transfer Learning with timm**
+    * *Curriculum Role:* Month 3 Week 3 modern computer vision architectures (ConvNeXt, ViT, Swin).
+11. **Ultralytics YOLO: Real-Time Computer Vision Field Guide (2024/2025)**
+    * *Curriculum Role:* Month 3 Week 4 real-time object detection and segmentation.
 
-## Month 4: Deep Learning
-- **Deep Learning with Python** by François Chollet
-  - Practical guide to Keras and deep learning
-- **Natural Language Processing with Transformers** by Lewis Tunstall et al.
-  - For NLP and transformer models
-- **Generative Deep Learning** by David Foster
-  - Covers GANs and other generative models
+---
 
-## Month 5: Advanced Topics & MLOps
-- **Designing Machine Learning Systems** by Chip Huyen
-  - Covers MLOps and production ML systems
-- **Practical MLOps** by Noah Gift and Alfredo Deza
-  - Hands-on MLOps practices
-- **Reinforcement Learning: An Introduction** by Sutton and Barto
-  - Standard reference for RL
+## 🤖 Large Language Models, Generative AI & Systems
+12. **Build a Large Language Model (From Scratch) (2024)**
+    * *Author:* Sebastian Raschka (Manning)
+    * *Curriculum Role:* Month 4 Week 1 & 2 coding the Transformer attention mechanisms, positional encodings, and GPT/Llama blocks from scratch in pure PyTorch.
+13. **Hands-On Large Language Models (2024)**
+    * *Authors:* Jay Alammar & Mirko Händler (O'Reilly)
+    * *Curriculum Role:* Month 4 Week 1, 3, & 4 intuitive visual models of tokens, embeddings, vector similarity, and RAG architectures.
+14. **Natural Language Processing with Transformers (Revised Edition)**
+    * *Authors:* Lewis Tunstall, Leandro von Werra, Thomas Wolf (Hugging Face / O'Reilly)
+    * *Curriculum Role:* Month 4 & Month 5 tokenizers, Hugging Face `transformers`, datasets, and `peft` fine-tuning.
+15. **AI Engineering: Building Applications with Foundation Models (2025)**
+    * *Author:* Chip Huyen (O'Reilly)
+    * *Curriculum Role:* Month 4, Month 5, & Month 6 modern AI stack, the Adaptation Ladder (Prompting $\to$ RAG $\to$ Agents $\to$ Fine-Tuning), LLM evaluation benchmarks, and latency/cost trade-offs.
+16. **Designing Large Language Model Applications (2025)**
+    * *Author:* Suhas Pai (O'Reilly)
+    * *Curriculum Role:* Month 5 Week 2 & 4 agentic orchestration, MCP, guardrails, and production GenAI architectures.
 
-## Additional Resources
-- **Building Machine Learning Powered Applications** by Emmanuel Ameisen
-  - Practical applications and deployment
-- **Hands-On Large Language Models** by various authors
-  - For advanced NLP topics
-- **ML Math**
-  - Quick reference for mathematical foundations
+---
 
-## Recommended Reading Order
-1. Start with practical books (Géron, Chollet) for hands-on learning
-2. Use theoretical books (Bishop, Goodfellow) for deeper understanding
-3. Reference specialized books as needed for specific topics
+## ⚙️ MLOps, LLMOps & Production Serving
+17. **Designing Machine Learning Systems (2022)**
+    * *Author:* Chip Huyen (O'Reilly)
+    * *Curriculum Role:* Month 5 & Month 6 data distribution shifts, feature stores, monitoring, and offline-to-online deployment.
+18. **Production Kubernetes & Containerized Inference (O'Reilly)**
+    * *Curriculum Role:* Month 5 Week 4 Docker, GPU runtime virtualization, and high-throughput vLLM serving.

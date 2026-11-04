@@ -1,189 +1,85 @@
-Week 3: Essential Math Part 1 Cheatsheet
+# Month 0, Week 3 Cheatsheet: Linear Algebra & Matrix Calculus for Machine Learning
 
-Quick reference for statistics, probability, and visualization.
+---
 
-📊 Statistics
+## 1. Vector Spaces, Norms & Inner Products
 
-Mean, Median, Mode
-```python
-import numpy as np
-from statistics import mode
+### Norm Formulas in $\mathbb{R}^d$
+$$\|x\|_1 = \sum_{i=1}^d |x_i|, \quad \|x\|_2 = \sqrt{\sum_{i=1}^d x_i^2}, \quad \|x\|_\infty = \max_i |x_i|, \quad \|x\|_p = \left(\sum_{i=1}^d |x_i|^p\right)^{1/p}$$
 
-data = [80, 85, 90, 95, 100]
+### Matrix Frobenius Norm
+$$\|A\|_F = \sqrt{\sum_{i=1}^m \sum_{j=1}^n A_{i, j}^2} = \sqrt{\text{Tr}(A^T A)} = \sqrt{\sum_{i=1}^{\min(m, n)} \sigma_i^2}$$
 
-Mean (average)
-mean = np.mean(data)  # 90
-mean_manual = sum(data) / len(data)
+### Cauchy-Schwarz & Triangle Inequalities
+$$|\langle u, v \rangle| \le \|u\|_2 \|v\|_2, \qquad \|u + v\|_2 \le \|u\|_2 + \|v\|_2$$
 
-Median (middle value)
-median = np.median(data)  # 90
+---
 
-Mode (most frequent)
-mode_val = mode(data)
-```
+## 2. Orthogonal Projections & QR Factorization
 
-Std Dev & Variance
-```python
-std_dev = np.std(data)    # Spread
-variance = np.var(data)   # Std dev squared
-```
+### Projection Operator onto Subspace $\mathcal{S} = \text{span}(A)$
+$$P = A(A^T A)^{-1} A^T$$
+- **Idempotent**: $P^2 = P$
+- **Symmetric**: $P^T = P$
+- **Orthogonal Complement**: $P_\perp = I - P$
 
-Min, Max, Range
-```python
-min_val = np.min(data)    # 80
-max_val = np.max(data)    # 100
-rangeval = maxval - min_val  # 20
-```
-
-🎲 Probability
-
-Basic Formulas
-```
-P(A) = Favorable Outcomes / Total Outcomes
-
-P(A and B) = P(A) × P(B)  [Independent]
-P(A or B) = P(A) + P(B) - P(A and B)
-P(A | B) = P(A and B) / P(B)  [Conditional]
-```
-
-Examples
-```python
-Coin flip: P(heads) = 1/2
-prob_heads = 1/2
-
-Dice: P(6) = 1/6
-prob_six = 1/6
-
-Two dice: P(both 6) = 1/36
-probbothsix = (1/6) * (1/6)
-```
-
-📈 Matplotlib Plotting
-
-Basic Line Plot
-```python
-import matplotlib.pyplot as plt
-
-x = [1, 2, 3, 4, 5]
-y = [1, 4, 9, 16, 25]
-
-plt.plot(x, y)
-plt.xlabel("X")
-plt.ylabel("Y")
-plt.title("Title")
-plt.show()
-```
-
-Scatter Plot
-```python
-plt.scatter(x, y)
-plt.show()
-```
-
-Histogram
-```python
-data = [65, 70, 75, 80, 85, 90, 95]
-
-plt.hist(data, bins=5)
-plt.xlabel("Score")
-plt.ylabel("Frequency")
-plt.show()
-```
-
-Bar Chart
-```python
-categories = ["A", "B", "C"]
-values = [10, 20, 15]
-
-plt.bar(categories, values)
-plt.show()
-```
-
-Multiple Subplots
-```python
-fig, axes = plt.subplots(2, 2)
-
-axes[0, 0].plot(x, y)
-axes[0, 1].scatter(x, y)
-axes[1, 0].bar(x, y)
-axes[1, 1].hist(y)
-
-plt.tight_layout()
-plt.show()
-```
-
-Customization
-```python
-plt.figure(figsize=(10, 6))
-plt.plot(x, y, 'r-', linewidth=2, label='Data')
-plt.plot(x, y2, 'b--', label='Comparison')
-plt.legend()
-plt.grid(True)
-plt.show()
-```
-
-🔢 NumPy Functions
-
-Array Creation
+### Gram-Schmidt Orthogonalization ($A = QR$)
 ```python
 import numpy as np
 
-np.array([1, 2, 3])        # From list
-np.zeros(5)                # [0, 0, 0, 0, 0]
-np.ones(5)                 # [1, 1, 1, 1, 1]
-np.arange(0, 10, 2)        # [0, 2, 4, 6, 8]
-np.linspace(0, 1, 5)       # 5 points from 0 to 1
+def modified_gram_schmidt(A: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    m, n = A.shape
+    Q = np.zeros((m, n), dtype=np.float64)
+    R = np.zeros((n, n), dtype=np.float64)
+    V = A.copy().astype(np.float64)
+    for i in range(n):
+        R[i, i] = np.linalg.norm(V[:, i])
+        Q[:, i] = V[:, i] / R[i, i]
+        for j in range(i + 1, n):
+            R[i, j] = np.dot(Q[:, i], V[:, j])
+            V[:, j] -= R[i, j] * Q[:, i]
+    return Q, R
 ```
 
-Statistical Functions
-```python
-data = np.array([1, 2, 3, 4, 5])
+---
 
-np.mean(data)        # Average
-np.median(data)      # Middle value
-np.std(data)         # Standard deviation
-np.var(data)         # Variance
-np.min(data)         # Minimum
-np.max(data)         # Maximum
-np.sum(data)         # Sum
-np.sort(data)        # Sorted
-```
+## 3. Singular Value Decomposition (SVD) & Spectral Geometry
 
-Element-Wise Operations
-```python
-arr1 = np.array([1, 2, 3])
-arr2 = np.array([4, 5, 6])
+Every real matrix $X \in \mathbb{R}^{m \times n}$ factorizes into:
+$$X = U \Sigma V^T = \sum_{i=1}^r \sigma_i u_i v_i^T$$
+where:
+- $U \in \mathbb{R}^{m \times m}$: Orthonormal left singular vectors (eigenvectors of $X X^T$).
+- $\Sigma \in \mathbb{R}^{m \times n}$: Diagonal singular values $\sigma_1 \ge \sigma_2 \ge \dots \ge \sigma_r > 0$.
+- $V \in \mathbb{R}^{n \times n}$: Orthonormal right singular vectors (eigenvectors of $X^T X$).
 
-arr1 + arr2          # [5, 7, 9]
-arr1 * arr2          # [4, 10, 18]
-np.sqrt(arr1)        # [1, 1.41, 1.73]
-```
+### Eckart-Young-Mirsky Low-Rank Approximation Theorem
+The optimal rank-$k$ approximation ($k < r$) minimizing Frobenius error is:
+$$\hat{X}_k = \sum_{i=1}^k \sigma_i u_i v_i^T, \qquad \min_{\text{rank}(B)=k} \|X - B\|_F^2 = \|X - \hat{X}_k\|_F^2 = \sum_{j=k+1}^r \sigma_j^2$$
 
-📐 Common Statistical Patterns
+---
 
-Percentile
-```python
-data = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-p75 = np.percentile(data, 75)  # 75th percentile
-```
+## 4. Moore-Penrose Pseudo-Inverse ($A^+$)
 
-Quartiles
-```python
-q1 = np.percentile(data, 25)
-q2 = np.percentile(data, 50)  # Median
-q3 = np.percentile(data, 75)
-```
+For any matrix $A = U \Sigma V^T$, its pseudo-inverse is:
+$$A^+ = V \Sigma^+ U^T \quad \text{where } \Sigma_{i, i}^+ = \begin{cases} 1/\sigma_i & \text{if } \sigma_i > \epsilon \\ 0 & \text{otherwise} \end{cases}$$
 
-Standard Error
-```python
-std_error = np.std(data) / np.sqrt(len(data))
-```
+### Applications to Linear Systems $Ax = b$
+1. **Over-determined ($m > n$, full column rank)**: $A^+ = (A^T A)^{-1} A^T$ (Least-Squares Solution).
+2. **Under-determined ($m < n$, full row rank)**: $A^+ = A^T (A A^T)^{-1}$ (Minimum-Norm Solution).
 
-Covariance
-```python
-x = np.array([1, 2, 3])
-y = np.array([2, 4, 6])
-covar = np.cov(x, y)
-```
+---
 
-[Back to Lecture](../lecturenotes/Week3Math_Part1.md)
+## 5. Matrix Differential Calculus Identities for Deep Learning
+
+| Scalar Objective Function $f(W)$ | Gradient $\nabla_W f(W)$ |
+|:---|:---|
+| $f(W) = a^T W b$ | $a b^T$ |
+| $f(W) = x^T W x$ (symmetric $W$) | $2 x x^T$ |
+| $f(W) = \frac{1}{2} \|X W - Y\|_F^2$ | $X^T (X W - Y)$ |
+| $f(W) = \text{Tr}(W)$ | $I$ |
+| $f(W) = \ln |W|$ (invertible $W$) | $W^{-T}$ |
+| $f(W) = \frac{1}{2} \|W\|_F^2$ | $W$ |
+
+### Vector-Jacobian Product (VJP) in Neural Layers
+For a forward layer $y = W x$:
+$$\nabla_x \mathcal{L} = W^T (\nabla_y \mathcal{L}), \qquad \nabla_W \mathcal{L} = (\nabla_y \mathcal{L}) x^T, \qquad \nabla_b \mathcal{L} = \nabla_y \mathcal{L}$$

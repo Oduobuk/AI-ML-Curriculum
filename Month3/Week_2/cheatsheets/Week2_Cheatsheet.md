@@ -1,78 +1,83 @@
-# Month 3, Week 2 Cheatsheet: Dimensionality Reduction
-
-## 1. Introduction to Dimensionality Reduction
-
-*   **Purpose:** Reduce the number of features (dimensions) in a dataset.
-*   **Why?**
-    *   **Curse of Dimensionality:** Problems arising in high-dimensional spaces (data sparsity, increased computation, overfitting).
-    *   **Visualization:** Easier to plot and understand data in 2D/3D.
-    *   **Noise Reduction:** Can remove irrelevant or redundant features.
-    *   **Computational Efficiency:** Faster training for subsequent models.
-*   **Types:**
-    *   **Feature Selection:** Choosing a subset of original features.
-    *   **Feature Extraction:** Creating new, lower-dimensional features from combinations of original ones.
+# Month 3, Week 2 Cheatsheet: Neural Network Engineering, Decoupled AdamW & Normalization
 
 ---
 
-## 2. Principal Component Analysis (PCA)
+## 1. Weight Initialization & Activation Variance Preservation
 
-*   **Type:** Linear Feature Extraction.
-*   **Goal:** Find orthogonal axes (Principal Components - PCs) that capture the maximum variance in the data.
-*   **How it Works:**
-    1.  **Center Data:** Subtract mean from each feature.
-    2.  **Compute Covariance Matrix:** Describes feature relationships.
-    3.  **Eigen-decomposition:** Find Eigenvectors (directions of PCs) and Eigenvalues (magnitudes of variance along PCs).
-    4.  **Project Data:** Transform data onto the top `k` PCs.
-*   **Key Concepts:**
-    *   **Principal Components (PCs):** New orthogonal axes, ordered by variance explained.
-    *   **Loading Scores (Eigenvectors):** Contribution of original features to each PC.
-    *   **Eigenvalues:** Amount of variance explained by each PC.
-    *   **Scree Plot:** Visualizes eigenvalues to help select `k` (look for "elbow").
-*   **Advantages:** Interpretable axes, fast, preserves global variance.
-*   **Limitations:** Linear method, may not capture non-linear relationships.
+To avoid vanishing or exploding activations across deep layers:
 
----
+### Linear / Tanh (Xavier / Glorot)
+$$\text{Var}(W) = \frac{2}{n_{\text{in}} + n_{\text{out}}} \qquad W_{i, j} \sim \mathcal{N}\left(0, \frac{2}{n_{\text{in}} + n_{\text{out}}}\right)$$
 
-## 3. t-SNE (t-Distributed Stochastic Neighbor Embedding)
+### ReLU / GeLU (He / Kaiming)
+$$\text{Var}(W) = \frac{2}{n_{\text{in}}} \qquad W_{i, j} \sim \mathcal{N}\left(0, \frac{2}{n_{\text{in}}}\right)$$
 
-*   **Type:** Non-linear Feature Extraction (Manifold Learning).
-*   **Goal:** Visualize high-dimensional data by preserving **local structure** (neighbor relationships) in a low-dimensional space (typically 2D/3D).
-*   **How it Works:**
-    1.  Converts high-dimensional Euclidean distances into conditional probabilities (Gaussian distribution).
-    2.  Creates similar probabilities in a low-dimensional space (Student's t-distribution).
-    3.  Minimizes the Kullback-Leibler (KL) divergence between these two distributions.
-*   **Key Concepts:**
-    *   **Perplexity:** Controls the balance between local and global aspects of the data. Roughly, the number of nearest neighbors considered.
-    *   **Local Structure:** Focuses on keeping nearby points nearby.
-*   **Advantages:** Excellent for visualizing clusters, reveals non-linear structures.
-*   **Limitations:** Computationally intensive, doesn't preserve global distances well (distances between clusters can be misleading), sensitive to `perplexity`.
+```python
+import torch.nn as nn
+
+nn.init.kaiming_normal_(linear_layer.weight, nonlinearity="relu")
+nn.init.zeros_(linear_layer.bias)
+```
 
 ---
 
-## 4. UMAP (Uniform Manifold Approximation and Projection)
+## 2. Pre-Norm vs Post-Norm Stability in Deep Residual Networks
 
-*   **Type:** Non-linear Feature Extraction (Manifold Learning).
-*   **Goal:** General-purpose dimensionality reduction, often for visualization, preserving both **local and global structure**.
-*   **How it Works:**
-    1.  Builds a weighted graph in high-dimensional space (fuzzy topological structure).
-    2.  Optimizes a low-dimensional graph to be as structurally similar as possible to the high-dimensional graph.
-*   **Key Concepts:**
-    *   **Manifold Learning:** Assumes data lies on a lower-dimensional manifold embedded in a higher-dimensional space.
-    *   **`n_neighbors`:** Controls how UMAP balances local vs. global structure.
-    *   **`min_dist`:** Controls how tightly UMAP packs points together.
-*   **Advantages:** Faster than t-SNE, better scalability, often preserves global structure better than t-SNE, strong theoretical foundation.
-*   **Limitations:** Still non-linear, interpretability of axes is limited.
+```
+            Post-LayerNorm (Unstable at Depth > 12)
+   x ──► [Residual Function F(x)] ──► (+) ──► [LayerNorm] ──► Output
+   │                                   ▲
+   └───────────────────────────────────┘
+
+            Pre-LayerNorm / Pre-RMSNorm (Stable at Depth 100+)
+   x ──► [RMSNorm] ──► [Residual Function F(x)] ──► (+) ──► Output
+   │                                                 ▲
+   └─────────────────────────────────────────────────┘
+```
 
 ---
 
-## 5. Comparison
+## 3. RMSNorm Architecture & Mathematical Formulation
 
-| Feature                 | PCA                                     | t-SNE                                       | UMAP                                        |
-| :---------------------- | :-------------------------------------- | :------------------------------------------ | :------------------------------------------ |
-| **Linear/Non-linear**   | Linear                                  | Non-linear                                  | Non-linear                                  |
-| **Speed**               | Very Fast                               | Slower                                      | Fast                                        |
-| **Scalability**         | High                                    | Moderate                                    | High                                        |
-| **Global Structure**    | Preserves well                          | Poorly preserved (distances between clusters can be misleading) | Generally preserves well                    |
-| **Local Structure**     | Preserves if variance is local          | Preserves very well                         | Preserves very well                         |
-| **Interpretability**    | Axes (PCs) are interpretable (loading scores) | Less interpretable                          | Less interpretable                          |
-| **Primary Use**         | General DR, noise reduction, feature engineering | Visualization of clusters                   | Visualization, general DR                   |
+Root Mean Square Normalization dispenses with mean centering, reducing FLOPs by $\sim 15\%$ while preserving scale invariance:
+$$\text{RMSNorm}(x) = \frac{x}{\text{RMS}(x)} \odot \gamma \quad \text{where } \text{RMS}(x) = \sqrt{\frac{1}{d} \sum_{i=1}^d x_i^2 + \epsilon}$$
+
+```python
+import torch
+import torch.nn as nn
+
+class RMSNorm(nn.Module):
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        rms = torch.sqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + self.eps)
+        return (x / rms) * self.weight
+```
+
+---
+
+## 4. Decoupled Weight Decay in AdamW (Loshchilov & Hutter 2017)
+
+In standard Adam with $L_2$ decay, gradients are penalized before moment estimation:
+$$\tilde{g}_t = g_t + \lambda \theta_{t-1} \implies \text{Second moment } v_t \text{ accumulates } \lambda^2 \theta^2 \text{ (distorting updates!)}$$
+
+In **AdamW**, weight decay is applied directly to the parameters, completely decoupled from gradient moments:
+$$\theta_t = \theta_{t-1} - \eta \lambda \theta_{t-1} - \frac{\eta}{\sqrt{\hat{v}_t} + \epsilon} \hat{m}_t$$
+
+---
+
+## 5. Gradient Norm Clipping
+
+Prevents exploding gradient spikes during stochastic mini-batch training:
+$$\text{If } \|\mathbf{g}\|_2 > \text{max\_norm}, \quad \mathbf{g} \leftarrow \mathbf{g} \times \frac{\text{max\_norm}}{\|\mathbf{g}\|_2}$$
+
+```python
+import torch.nn.utils as utils
+
+loss.backward()
+total_norm = utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+optimizer.step()
+```

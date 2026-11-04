@@ -1,48 +1,62 @@
-Month 5, Week 1: Reinforcement Learning Cheatsheet
+# Month 5, Week 1 Cheatsheet: Fine-Tuning, Parameter-Efficient Adaptation (PEFT) & QLoRA
 
- Core Concepts
+---
 
-| Term | Description |
-| :--- | :--- |
-| Agent | The learner or decision-maker that interacts with the environment. |
-| Environment | The external system that the agent interacts with, providing states and rewards. |
-| State (s) | A representation of the environment at a specific point in time. |
-| Action (a) | A decision made by the agent to interact with the environment. |
-| Reward (r) | The immediate feedback signal the agent receives from the environment after performing an action. |
-| Policy (π) | The agent's strategy for choosing actions in different states. Can be deterministic or stochastic. |
-| Value Function (V, Q) | A prediction of the expected future reward. Used to evaluate the goodness of states or state-action pairs. |
-| Episode | A sequence of states, actions, and rewards from a starting state to a terminal state. |
+## 1. Parameter-Efficient Fine-Tuning: LoRA Mathematics
 
- Key Equations
+Standard full fine-tuning modifies $W_0 \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$, updating all $d_{\text{in}} \times d_{\text{out}}$ weights. LoRA freezes $W_0$ and decomposes updates into low-rank matrices:
+$$h = W_0 x + \Delta W x = W_0 x + \frac{\alpha}{r} (B A) x$$
+where:
+- $A \in \mathbb{R}^{r \times d_{\text{in}}}$: Initialized with Gaussian noise $\mathcal{N}(0, \sigma^2)$.
+- $B \in \mathbb{R}^{d_{\text{out}} \times r}$: Initialized to **exact zero** (ensures $\Delta W = 0$ on step 0).
+- $r \ll \min(d_{\text{in}}, d_{\text{out}})$: Intrinsic adapter rank (typically $8 - 64$).
+- $\frac{\alpha}{r}$: Constant scaling factor ensuring stable gradient steps when varying rank $r$.
 
-Bellman Equation for State-Value Function V(s):
+---
+
+## 2. QLoRA: NormalFloat-4 (NF4) & Double Dequantization
+
+QLoRA (Dettmers et al. 2023) enables 4-bit fine-tuning of 70B models on a single GPU:
+
 ```
-V(s) = E[R_{t+1} + γ  V(S_{t+1}) | S_t = s]
+                      QLoRA Memory Architecture
+ ┌────────────────────────────────────────────────────────┐
+ │ 4-Bit NormalFloat Base Weights (NF4)                   │  Frozen base weights
+ ├────────────────────────────────────────────────────────┤  (Saves 75% VRAM)
+ ├───────────────────┬────────────────────────────────────┤
+ │ LoRA Adapter A    │ LoRA Adapter B                     │  Trainable FP16 / BF16
+ │ (rank r=16)       │ (rank r=16)                        │  (< 1% of total params)
+ └───────────────────┴────────────────────────────────────┘
 ```
-This equation expresses the value of a state as the expected immediate reward plus the discounted value of the next state.
 
-Bellman Equation for Action-Value Function Q(s, a):
+### NormalFloat-4 (NF4) Information Density
+- Weights follow a normal distribution $\mathcal{N}(0, \sigma^2)$.
+- NF4 quantiles are derived such that each discrete 4-bit bin contains identical probability mass $\frac{1}{16}$, maximizing information entropy compared to uniform INT4.
+- **Double Dequantization**: Quantizes the 32-bit quantization constants down to 8-bit, saving an additional 0.37 bits per parameter.
+
+---
+
+## 3. Production Weight Merging for Zero-Overhead Inference
+
+During serving, eliminate adapter matrix latency by folding weights into base parameters:
+$$W_{\text{serving}} = W_0 + \frac{\alpha}{r} (B A)$$
+
+```python
+from peft import AutoPeftModelForCausalLM
+
+# Load trained adapter
+model = AutoPeftModelForCausalLM.from_pretrained("/checkpoints/lora_adapter")
+# Merge adapter weights directly into base FP16 weights
+merged_model = model.merge_and_unload()
+merged_model.save_pretrained("/models/fused_production_model")
 ```
-Q(s, a) = E[R_{t+1} + γ  Q(S_{t+1}, A_{t+1}) | S_t = s, A_t = a]
+
+---
+
+## 4. Supervised Fine-Tuning (SFT) Masked Loss Labeling
+
+Only calculate cross-entropy loss on the assistant's generated completion tokens:
+```python
+# System + User prompt tokens set to label -100 (ignored by PyTorch CrossEntropyLoss)
+labels = [-100] * len(prompt_tokens) + completion_tokens
 ```
-This equation expresses the value of taking an action in a state as the expected immediate reward plus the discounted value of the next state-action pair.
-
- Algorithms
-
-| Algorithm | Learning Method | Model-Based/Free | Description |
-| :--- | :--- | :--- | :--- |
-| Value Iteration | Dynamic Programming | Model-Based | Iteratively updates the value function until it converges to the optimal value function. |
-| Policy Iteration | Dynamic Programming | Model-Based | Alternates between policy evaluation (calculating the value function for the current policy) and policy improvement (improving the policy based on the current value function). |
-| Monte Carlo (MC) | Monte Carlo | Model-Free | Learns from complete episodes of experience. Updates value estimates after an episode is finished. |
-| Q-Learning | Temporal-Difference | Model-Free | An off-policy TD algorithm that learns the optimal action-value function, Q(s, a), directly. |
-| SARSA | Temporal-Difference | Model-Free | An on-policy TD algorithm that learns the action-value function for the current policy. |
-
- Exploration vs. Exploitation
-
-    Exploration: Trying out new actions to discover their potential rewards.
-    Exploitation: Choosing the action with the currently estimated best value.
-
-Common Strategies:
-    ε-greedy (Epsilon-greedy): With probability ε, choose a random action (explore). With probability 1-ε, choose the best-known action (exploit).
-    Upper Confidence Bound (UCB): Choose actions based on both their estimated value and the uncertainty of that estimate.
-    Softmax (Boltzmann) Exploration: Choose actions based on a probability distribution derived from their value estimates.

@@ -1,44 +1,111 @@
-# Week 1 Cheatsheet: AI Fundamentals
-
-## The Three Stages of AI
-
-| Stage                          | AKA        | Description                                                                 | Current Status                               |
-| ------------------------------ | ---------- | --------------------------------------------------------------------------- | -------------------------------------------- |
-| **Artificial Narrow Intelligence** | Weak AI    | AI that is designed and trained for one specific task.                      | **Achieved.** All current AI is Narrow AI.   |
-| **Artificial General Intelligence**| Strong AI  | A machine with the ability to learn and understand any task a human can.    | **Not Achieved.** This is a research goal.   |
-| **Artificial Super Intelligence**  | ASI        | An intellect that is much smarter than the best human brains in every field. | **Hypothetical.** The realm of science fiction. |
+# Month 1, Week 1 Cheatsheet: High-Performance Data Processing with Polars & Apache Arrow
 
 ---
 
-## The Three Types of Machine Learning
+## 1. Apache Arrow Columnar Memory Model vs Pandas
 
-| Type                  | How it Learns                                       | Data Requirement          | Goal                                               | Analogy                                       |
-| --------------------- | --------------------------------------------------- | ------------------------- | -------------------------------------------------- | --------------------------------------------- |
-| **Supervised Learning** | Learns from examples with correct answers.          | **Labeled Data** (Input + Output) | Predict an output for new, unseen data.            | A student learning with a teacher and flashcards. |
-| **Unsupervised Learning** | Finds patterns and structures on its own.           | **Unlabeled Data** (Input only) | Discover hidden groupings or anomalies in the data. | A detective finding patterns among case files.    |
-| **Reinforcement Learning**| Learns through trial and error with rewards/penalties. | **No Pre-defined Data**   | Learn the best sequence of actions to take.        | A dog learning a new trick with treats as rewards. |
+```
+                      Row-Oriented Layout (Pandas / NumPy)
+ ┌─────────┬─────────┬─────────┐ ┌─────────┬─────────┬─────────┐
+ │ Row 0:  │ val_A   │ val_B   │ │ Row 1:  │ val_A   │ val_B   │ ...
+ └─────────┴─────────┴─────────┘ └─────────┴─────────┴─────────┘
+ (Cache thrashing during column aggregations; requires full row loads)
+
+                      Columnar Layout (Apache Arrow / Polars)
+ ┌─────────────────────────────────────────────────────────────┐
+ │ Column A Buffer (contiguous 32-bit floats in L1/L2 cache)   │
+ ├─────────────────────────────────────────────────────────────┤
+ │ Column B Buffer (contiguous 64-bit integers)                │
+ ├─────────────────────────────────────────────────────────────┤
+ │ Validity Bitmap (1 bit per row: 0 = null, 1 = valid)        │
+ └─────────────────────────────────────────────────────────────┘
+ (Vectorized SIMD instruction execution: AVX-512 / ARM Neon)
+```
+
+### Memory Footprint Comparison
+- **Pandas**: Object columns store arrays of 64-bit pointers to heap `PyObject` strings. Nulls represented as float `NaN`, forcing integer columns to cast to float.
+- **Polars**: Native contiguous byte buffers. 1-bit validity bitmap. Strings stored in contiguous memory with integer offset arrays.
 
 ---
 
-## Core Components of a Neural Network
+## 2. Polars Query Optimization Engine (`LazyFrame`)
 
-*   **Neuron:** A node that holds a numerical value called an **activation** (usually between 0 and 1).
-*   **Layers:** Neurons are organized into layers.
-    *   **Input Layer:** Receives the initial data. The number of neurons often matches the number of features in the data.
-    *   **Hidden Layers:** Intermediate layers where most of the "learning" happens. They detect patterns in the data.
-    *   **Output Layer:** Produces the final result or prediction.
-*   **Weights:** Numbers that define the strength of the connection between two neurons. The network learns by adjusting these weights.
-*   **Bias:** A number added to the weighted sum of inputs, which helps shift the activation function. It determines how easily a neuron gets activated.
-*   **Activation Function (e.g., Sigmoid, ReLU):** A function that "squishes" the output of a neuron into a specific range (like 0 to 1), adding non-linearity to the network.
+Always prefer `LazyFrame` over eager `DataFrame` for production pipelines:
+```python
+import polars as pl
+
+lazy_plan = (
+    pl.scan_parquet("/data/telemetry/*.parquet")
+    .filter((pl.col("device_id") == "sensor_101") & (pl.col("voltage") > 12.0))
+    .select(["timestamp", "voltage", "current"])
+)
+
+# Inspect query optimizer AST
+print(lazy_plan.explain(optimized=False))  # Raw unoptimized AST
+print(lazy_plan.explain(optimized=True))   # Fast pushdown AST
+```
+
+### Critical Optimizer Pushdowns
+- **Predicate Pushdown**: Evaluates `.filter()` inside the Parquet reader, skipping entire row groups based on Parquet page statistics (min/max metadata) without loading them into RAM.
+- **Projection Pushdown**: Drops unselected columns before disk reading begins.
+- **Common Subplan Elimination**: Identifies duplicate transformation branches and computes them once.
 
 ---
 
-## Why Python for AI?
+## 3. High-Performance Vectorized Polars Expressions
 
-*   **Simple Syntax:** Easy to read and write.
-*   **Massive Libraries:**
-    *   **NumPy:** For numerical operations.
-    *   **Pandas:** For data manipulation.
-    *   **Scikit-learn:** For classic machine learning algorithms.
-    *   **TensorFlow & PyTorch:** For deep learning.
-*   **Large Community:** Easy to find help and resources.
+Never drop into Python loops or `.apply()` (which serializes back into CPython). Use native expressions:
+
+### Temporal & Rolling Window Aggregations
+```python
+df = df.with_columns([
+    # Rolling 100-tick moving average
+    pl.col("voltage").rolling_mean(window_size=100).over("device_id").alias("rolling_mean_v"),
+    
+    # Rolling standard deviation
+    pl.col("voltage").rolling_std(window_size=100).over("device_id").alias("rolling_std_v"),
+    
+    # Shift operations (lead / lag)
+    pl.col("voltage").shift(1).over("device_id").alias("prev_voltage")
+]).with_columns([
+    # Vectorized anomaly flag
+    ((pl.col("voltage") - pl.col("rolling_mean_v")).abs() > 3.0 * pl.col("rolling_std_v")).alias("is_outlier")
+])
+```
+
+### Fast Categorical Casting & String Normalization
+```python
+df = df.with_columns([
+    pl.col("category").cast(pl.Categorical),
+    pl.col("metric").cast(pl.Float32),
+    pl.col("raw_text").str.strip_chars().str.to_lowercase()
+])
+```
+
+---
+
+## 4. Out-of-Core Streaming Sink Engine
+
+For datasets exceeding available host RAM:
+```python
+# Streaming collection into RAM
+result = lazy_plan.collect(streaming=True)
+
+# Streaming directly to partitioned Parquet sink on disk
+lazy_plan.sink_parquet(
+    "/data/sink/output.parquet",
+    compression="zstd",
+    compression_level=3
+)
+```
+
+---
+
+## 5. Performance Cheat Table: Pandas vs Polars
+
+| Operation | Pandas (Python runtime) | Polars (Rust Arrow runtime) |
+|:---|:---|:---|
+| **Multi-column group-by** | Single-threaded GIL bound | Multi-threaded lock-free work-stealing |
+| **Parquet Scan** | Full disk load into RAM | Memory-mapped chunk streaming + pushdown |
+| **Missing Values** | `NaN` float conversion | Native 1-bit Arrow validity bitmap |
+| **Memory Reuse** | Frequent full data copying | Zero-copy Arrow slicing (`slice()`) |

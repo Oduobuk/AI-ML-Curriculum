@@ -1,275 +1,181 @@
-Week 1: Exercises
+# Month 0, Week 1: High-Performance Python Internals & Systems Engineering — Exercises
 
-Getting Comfortable with Python
-
-Complete these exercises to reinforce the concepts from the lecture. Start with Easy, then Medium, then Challenge.
-
-🟢 Easy Exercises
-
-Exercise 1.1: Hello World Variations
-
-Create a program that prints the following (exactly):
 ```
-*
-    Welcome to Python!
-*
+================================================================================
+COURSE:    AI & LLM SYSTEMS ENGINEERING (2026 EDITION)
+MODULE:    MONTH 0: ADVANCED PYTHON & APPLIED MATHEMATICS FOR AI
+WEEK:      WEEK 1: HIGH-PERFORMANCE PYTHON INTERNALS & UV TOOLING
+DELIVERABLE: RIGOROUS GRADUATE-LEVEL LAB EXERCISES & VERIFICATION SUITE
+TARGET:    SENIOR AI ENGINEERS & SYSTEMS ARCHITECTS
+================================================================================
 ```
 
-Hint: Use `print()` and string multiplication.
+---
 
-Exercise 1.2: Variables & Types
+## Overview & Execution Protocol
 
-Create a program that:
-1. Creates variables for: name, age, height (float), is_student (boolean)
-2. Prints each variable with a label
-3. Prints the type of each variable
+These exercises are designed to test and solidify your mechanistic understanding of CPython runtime internals, memory representations, garbage collection dynamics, bytecode execution, and custom iterator protocols.
 
-Example Output:
-```
-Name: Alice
-Age: 25
-Height: 5.7
-Is Student: True
-Type of name: <class 'str'>
-Type of age: <class 'int'>
+### Environment Setup
+All exercises must be implemented using **Python 3.11+** managed strictly via **uv**:
+```bash
+uv init week1-exercises
+cd week1-exercises
+uv add pytest numpy tabulate
 ```
 
-Exercise 1.3: Simple Arithmetic
+### Graded Difficulty Levels
+- **Tier 1: Core Mechanics (Questions 1.1 – 1.3)**: Memory addresses, small integer caching, ref counting, and mutability.
+- **Tier 2: Intermediate Systems (Questions 1.4 – 1.6)**: Bytecode disassembly, circular reference garbage collection, and custom memory profiling.
+- **Tier 3: Advanced Engineering (Questions 1.7 – 1.8)**: High-performance zero-copy iterators and custom memory pool allocators.
 
-Write a program that:
-1. Stores two numbers in variables
-2. Calculates: sum, difference, product, quotient, power
-3. Prints all results with labels
+---
 
-Example:
-```
-Number 1: 10
-Number 2: 3
+## Tier 1: Core Mechanics & CPython Memory Internals
 
-10 + 3 = 13
-10 - 3 = 7
-10 * 3 = 30
-10 / 3 = 3.333...
-10  3 = 1000
-```
+### Exercise 1.1: Small Integer Caching & String Interning Probe
+- **Objective**: Mechanistically demonstrate CPython's integer pre-allocation pool ($[-5, 256]$) and string interning mechanisms using `id()` and the `is` identity operator.
+- **Requirements**:
+  1. Write a function `probe_small_integer_cache(start: int = -10, end: int = 300) -> tuple[int, int]` that returns the exact lowest and highest integer boundaries where `a is b` evaluates to `True` for independently instantiated integers.
+  2. Explain why `a = 256; b = 256; a is b` is `True`, but `a = 257; b = 257; a is b` is `False` in interactive REPLs, yet may evaluate to `True` within a compiled code block.
+  3. Use `sys.intern()` to demonstrate how runtime string identity comparisons can be optimized from $O(N)$ string character scans to $O(1)$ pointer comparisons.
 
-Exercise 1.4: String Practice
+---
 
-Create a program that:
-1. Stores a first name and last name
-2. Combines them into a full name
-3. Prints the full name
-4. Prints the length of the full name
+### Exercise 1.2: Reference Counting & Object Graph Inspection
+- **Objective**: Track the physical CPython reference count (`PyObject.ob_refcnt`) of dynamic objects across scope transitions.
+- **Requirements**:
+  1. Write a script utilizing `sys.getrefcount()` to track an object's reference counter through:
+     - Variable assignment.
+     - Insertion into a list, dictionary, and tuple.
+     - Passing as an argument to a function.
+     - Deletion via `del`.
+  2. Explain why `sys.getrefcount(x)` always returns a count that is **1 higher** than the actual number of references holding `x`.
+  3. Construct a test demonstrating how shallow copies (`copy.copy()`) increment reference counters of nested elements, whereas deep copies (`copy.deepcopy()`) allocate new heap objects.
 
-Example:
-```
-First Name: John
-Last Name: Doe
-Full Name: John Doe
-Length: 8
-```
+---
 
-Exercise 1.5: Input & Output
+### Exercise 1.3: The Mutable Default Argument Catastrophe
+- **Objective**: Deconstruct why default function arguments are evaluated at **function definition time** rather than **invocation time**.
+- **Requirements**:
+  1. Write a function with a signature `def append_tensor(tensor: list, cache: list = []) -> list`. Demonstrate how successive calls mutate the shared default list across completely unrelated invocations.
+  2. Inspect the function's `__defaults__` tuple in Python bytecode before and after invocation.
+  3. Refactor the function to the production-standard sentinel pattern (`cache: list | None = None`) and prove that new heap instances are allocated per invocation.
 
-Write a program that:
-1. Asks the user for their name
-2. Asks the user for their favorite color
-3. Prints: "Hi [name], I like [color] too!"
+---
 
-🟡 Medium Exercises
+## Tier 2: Intermediate Systems & CPython Bytecode
 
-Exercise 2.1: Rectangle Area
+### Exercise 1.4: Bytecode Disassembly & Stack Machine Analysis
+- **Objective**: Analyze the execution stack of CPython's virtual machine using the standard `dis` module.
+- **Requirements**:
+  1. Disassemble the following two functions that achieve the same result:
+     ```python
+     def loop_sum(n: int) -> int:
+         s = 0
+         for i in range(n):
+             s += i
+         return s
 
-Create a program that:
-1. Gets width and height from user (as floats)
-2. Calculates the area
-3. Prints results
+     def comp_sum(n: int) -> int:
+         return sum(i for i in range(n))
+     ```
+  2. Identify the specific bytecode opcodes (`LOAD_FAST`, `STORE_FAST`, `BINARY_OP`, `FOR_ITER`).
+  3. Explain which function executes fewer bytecode instructions and why list/generator comprehensions execute in isolated C-stack frames.
 
-Example:
-```
-Enter width: 5
-Enter height: 3
-Area: 15.0
-```
+---
 
-Exercise 2.2: Temperature Converter
+### Exercise 1.5: Circular References & Generational Garbage Collection Tuning
+- **Objective**: Force a circular reference cycle that bypasses reference counting and requires the generational garbage collector (`gc`).
+- **Requirements**:
+  1. Define a class `Node` that holds a pointer to another `Node`. Create a cycle: `a.next = b; b.next = a`.
+  2. Explicitly disable automatic GC using `gc.disable()`.
+  3. Delete references `del a, b`. Prove that `sys.getrefcount()` cannot reclaim these objects, causing a silent memory leak.
+  4. Call `gc.collect()` and verify that the circular reference is successfully identified and collected in Generation 2. Inspect `gc.garbage`.
 
-Write a program that:
-1. Gets temperature in Celsius from user
-2. Converts to Fahrenheit: F = (C × 9/5) + 32
-3. Prints both temperatures
+---
 
-Example:
-```
-Enter temperature in Celsius: 0
-0.0°C = 32.0°F
-```
+### Exercise 1.6: Memory Profiling via `tracemalloc`
+- **Objective**: Measure peak heap memory allocation and identify line-by-line memory allocation bottlenecks in Python.
+- **Requirements**:
+  1. Write a function that processes 100,000 dictionary records in two ways:
+     - Approach A: Creating a list of full Python dictionaries `[{"id": i, "val": i * 2} for i in range(100_000)]`.
+     - Approach B: Using `__slots__` or a namedtuple / dataclass.
+  2. Use `tracemalloc.start()` and `tracemalloc.take_snapshot()` to profile both approaches.
+  3. Output a tabular comparison showing: Total RAM allocated (MB), Peak RAM (MB), and relative memory savings ($>60\%$).
 
-Exercise 2.3: Age Calculator
+---
 
-Create a program that:
-1. Gets the user's birth year
-2. Calculates current age (assume 2024)
-3. Calculates age 10 years from now
-4. Prints both
+## Tier 3: Advanced Systems Engineering
 
-Exercise 2.4: Billing Calculator
+### Exercise 1.7: High-Performance Zero-Copy Chunking Iterator
+- **Objective**: Implement a memory-efficient sliding-window iterator over large sequences without copying data.
+- **Requirements**:
+  1. Implement a class `ZeroCopySlidingWindow(sequence, window_size: int, step: int)` implementing the `__iter__` and `__next__` dunder protocols.
+  2. The iterator must utilize Python `memoryview` or `itertools.islice` to ensure that window slices **never allocate new duplicate strings or byte arrays in memory**.
+  3. Benchmark processing a 50MB byte buffer: compare the peak memory footprint of `ZeroCopySlidingWindow` against naive list slicing `seq[i:i+window_size]`.
 
-Write a program that:
-1. Gets item price from user
-2. Calculates 8% tax
-3. Calculates total (price + tax)
-4. Prints all three values
+---
 
-Example:
-```
-Item Price: $50.00
-Tax (8%): $4.00
-Total: $54.00
-```
+### Exercise 1.8: Custom Fixed-Size Object Memory Pool
+- **Objective**: Implement an object pooler in Python to eliminate memory allocator overhead (`PyObject_Malloc`) during high-frequency short-lived object lifecycles.
+- **Requirements**:
+  1. Construct a class `TensorPayloadPool(object_factory, pool_size: int = 1000)`.
+  2. Implement `acquire()` and `release(obj)` methods using a thread-safe deque.
+  3. Benchmark 1,000,000 allocation-destruction cycles: compare standard object instantiation time against pool recycling time.
 
-Hint: Use f-strings for nice formatting with `:.2f` for 2 decimal places.
+---
 
-Exercise 2.5: Personal Summary
+## Solutions & Verification Key
 
-Create a program that:
-1. Gets user's name, age, city
-2. Gets their favorite hobby
-3. Prints a formatted summary
-
-Example Output:
-```
-=== PERSONAL PROFILE ===
-Name: Alice
-Age: 25
-City: New York
-Hobby: Reading
-Favorite Activity: Alice loves Reading in New York!
-```
-
-🔴 Challenge Exercises
-
-Challenge 2.1: Simple Tip Calculator
-
-Create a program that:
-1. Gets meal cost from user
-2. Gets tip percentage from user (e.g., 15, 18, 20)
-3. Calculates tip amount and total
-4. Displays results nicely
-
-Example:
-```
-Meal Cost: $75.50
-Tip Percentage: 18
-Tip Amount: $13.59
-Total: $89.09
-```
-
-Challenge 2.2: BMI Calculator
-
-Create a program that:
-1. Gets weight (in pounds) from user
-2. Gets height (in inches) from user
-3. Calculates BMI: BMI = (weight / (height²)) × 703
-4. Prints the BMI
-
-Example:
-```
-Weight (lbs): 180
-Height (inches): 70
-BMI: 25.81
-```
-
-Challenge 2.3: Multiple Unit Conversion
-
-Create a program that converts:
-1. Miles to Kilometers (multiply by 1.60934)
-2. Pounds to Kilograms (divide by 2.20462)
-3. Fahrenheit to Celsius (C = (F - 32) × 5/9)
-
-Let the user pick which conversion and perform it.
-
-Challenge 2.4: Grocery Receipt
-
-Create a program that:
-1. Gets 3 item names and prices from user
-2. Calculates subtotal
-3. Calculates 6% tax
-4. Calculates total
-5. Prints a formatted receipt
-
-Example Output:
-```
-===== GROCERY RECEIPT =====
-Item 1: Bread         $2.50
-Item 2: Milk          $3.75
-Item 3: Eggs          $4.25
-
-Subtotal:             $10.50
-Tax (6%):             $0.63
-Total:                $11.13
-============================
-```
-
-🧠 Debugging Practice
-
-These programs have bugs. Find and fix them:
-
-Bug Fix 1:
+### Solution 1.1: Small Integer Cache Probe
 ```python
-name = input("What's your name? ")
-age_str = input("How old are you? ")
-age = age_str  # Bug here!
-print(f"{name} is {age + 1} next year")
+import sys
+
+def probe_small_integer_cache(start: int = -10, end: int = 300) -> tuple[int, int]:
+    cached_ints = []
+    for i in range(start, end):
+        # Create two separate instances
+        a = int(str(i))
+        b = int(str(i))
+        if a is b:
+            cached_ints.append(i)
+    return min(cached_ints), max(cached_ints)
+
+if __name__ == "__main__":
+    low, high = probe_small_integer_cache()
+    print(f"CPython Integer Cache Range: [{low}, {high}]")
+    assert low == -5 and high == 256, f"Expected [-5, 256], got [{low}, {high}]"
 ```
 
-Problem: What goes wrong? How do you fix it?
-
-Bug Fix 2:
+### Solution 1.5: Circular Reference GC Verification
 ```python
-price = 100
-tax_rate = 0.08
-total = price + (price tax_rate)  # Bug here!
-print(total)
+import gc
+import sys
+
+class CycleNode:
+    def __init__(self, name: str):
+        self.name = name
+        self.next = None
+
+def verify_cycle_gc():
+    gc.collect()
+    gc.disable() # Disable cyclic collector
+
+    a = CycleNode("A")
+    b = CycleNode("B")
+    a.next = b
+    b.next = a
+
+    del a, b # Reference count drops from 2 to 1 (not zero!)
+    
+    # Prove objects still reside in memory
+    uncollected = gc.collect() # Manually trigger collector
+    print(f"Cyclic objects collected by gc: {uncollected}")
+    assert uncollected >= 2, "Failed to collect circular references!"
+    gc.enable()
+
+if __name__ == "__main__":
+    verify_cycle_gc()
 ```
 
-Problem: What's the syntax error?
-
-Bug Fix 3:
-```python
-first = "John"
-last = "Doe"
-full_name = first last  # Bug here!
-print(full_name)
-```
-
-Problem: What operator is missing?
-
-💡 Tips for Success
-
-1. Run frequently: Test after every 2-3 lines
-2. Read error messages: They tell you what's wrong
-3. Use meaningful names: `student_name` not `x`
-4. Add comments: Explain your code
-5. Don't memorize: Understanding is more important
-
-🎯 Self-Check
-
-After completing these exercises, you should be able to:
-- [ ] Write programs using `print()` and `input()`
-- [ ] Create and manipulate variables
-- [ ] Perform arithmetic operations
-- [ ] Work with strings (concatenation, length)
-- [ ] Convert between data types
-- [ ] Read and understand error messages
-
-📝 Submission
-
-Save your programs as `.py` files:
-- `exercise11.py`
-- `exercise12.py`
-- etc.
-
-You can organize them in a folder: `Week1_Exercises/`
-
-Next: Move to the [Assignment](../assignments/Week1_Assignment.md)

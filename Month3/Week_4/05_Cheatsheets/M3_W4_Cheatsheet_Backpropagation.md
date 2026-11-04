@@ -1,84 +1,71 @@
- Cheatsheet: Backpropagation & Neural Networks
+# Month 3, Week 4 Cheatsheet: Real-Time Edge Vision, YOLO Detection & CIoU Loss
 
-This cheatsheet summarizes the key formulas and concepts for a simple feedforward neural network.
+---
 
+## 1. Object Detection Bounding Box Formulations & Coordinate Systems
 
+```
+                     Bounding Box Parameterizations
+        Corner Format (x1, y1, x2, y2)        Center Format (cx, cy, w, h)
+     (x1, y1) ┌──────────────┐                          ┌──────────────┐
+              │              │                          │   (cx, cy)   │
+              │              │                          │      •       │ h
+              │              │                          │              │
+              └──────────────┘ (x2, y2)                 └──────────────┘
+                                                               w
+```
 
- 1. Core Components
+### Complete IoU (CIoU) Loss Formulation
+$$\mathcal{L}_{\text{CIoU}} = 1 - \text{IoU} + \frac{\rho^2(b, b^{\text{gt}})}{c^2} + \alpha v$$
+where:
+- $\text{IoU} = \frac{|A \cap B|}{|A \cup B|}$.
+- $\rho^2$: Squared Euclidean distance between box center points.
+- $c^2$: Squared diagonal distance of the smallest enclosing bounding box.
+- $v = \frac{4}{\pi^2} \left(\arctan\frac{w^{\text{gt}}}{h^{\text{gt}}} - \arctan\frac{w}{h}\right)^2$ (aspect ratio consistency).
+- $\alpha = \frac{v}{(1 - \text{IoU}) + v}$ (adaptive dynamic trade-off parameter).
 
-- Neuron Activation (`a`): A value between 0 and 1 representing how "active" a neuron is.
-- Weights (`W`): A matrix of parameters that scales the activations from the previous layer. `W_ij` is the weight from the j-th neuron in the previous layer to the i-th neuron in the current layer.
-- Bias (`b`): A vector of parameters that provides an offset, allowing the activation function to shift.
-- Weighted Sum (`z`): The linear combination of inputs, weights, and bias before the activation function. `z = W  a_prev + b`.
-- Activation Function (`g(z)`): A non-linear function that "squishes" the weighted sum `z` into the neuron's output activation `a`. `a = g(z)`.
+---
 
+## 2. Anchor-Free Decoupled Detection Head (YOLOv8/v11 Style)
 
+Separates class prediction from geometric coordinate regression:
+- **Classification Branch**: Predicts class logits using Binary Cross-Entropy (BCE) Loss.
+- **Bounding Box Regression Branch**: Predicts distance offsets $(l, t, r, b)$ from grid cell anchor points $(c_x, c_y)$ to box edges:
+  $$\hat{x}_1 = c_x - l, \quad \hat{y}_1 = c_y - t, \quad \hat{x}_2 = c_x + r, \quad \hat{y}_2 = c_y + b$$
 
- 2. Key Activation Functions & Their Derivatives
+---
 
-| Function | Formula `g(z)` | Derivative `g'(z)` |
-| : | : | : |
-| Sigmoid | `1 / (1 + exp(-z))` | `g(z)  (1 - g(z))` or `a  (1 - a)` |
-| ReLU | `max(0, z)` | `1` if `z > 0`, `0` otherwise |
-| Softmax | `exp(z_i) / sum(exp(z_j))` | (Used for output layer, derivative is complex but simplifies in loss function) |
+## 3. Vectorized Greedy Non-Maximum Suppression (NMS)
 
+Prunes redundant overlapping detections:
+```python
+def vectorized_nms(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float = 0.5) -> list[int]:
+    order = scores.argsort(descending=True)
+    keep = []
+    
+    while order.numel() > 0:
+        i = order[0].item()
+        keep.append(i)
+        if order.numel() == 1:
+            break
+            
+        cur_box = boxes[i].unsqueeze(0)
+        remaining = boxes[order[1:]]
+        
+        # Vectorized pairwise IoU
+        ious = compute_pairwise_iou(cur_box, remaining).squeeze(0)
+        mask = ious <= iou_threshold
+        order = order[1:][mask]
+        
+    return keep
+```
 
+---
 
- 3. Forward Propagation
+## 4. Post-Training Quantization (PTQ) INT8 Math
 
-For a single layer `L`:
-
-1.  Calculate Weighted Sum:
-    `z^[L] = W^[L] @ a^[L-1] + b^[L]`
-
-2.  Calculate Activation (Output of the layer):
-    `a^[L] = g(z^[L])`
-
-(Repeat for all layers from input to output)
-
-
-
- 4. Cost Function (Categorical Cross-Entropy)
-
-For a single sample: `C = - sum(y_i  log(a_i))`
-For all `m` samples: `C = -(1/m)  sum(Y  log(A))`
-
-- `y_i` is the true label (1 for the correct class, 0 otherwise).
-- `a_i` is the predicted probability for that class.
-- `Y` and `A` are matrices for all samples.
-
-
-
- 5. Backpropagation (The Four Core Equations)
-
-Let `δ^[L]` be the "error" of layer `L`.
-
-1.  Error at Output Layer (`L`):
-    (For Softmax + Cross-Entropy Loss)
-    `δ^[L] = a^[L] - y`
-
-2.  Error at Hidden Layer (`l`):
-    (Error from the next layer, propagated back)
-    `δ^[l] = ( (W^[l+1]).T @ δ^[l+1] )  g'(z^[l])`
-
-3.  Gradient of Cost w.r.t. Biases (`b`):
-    (The error of the layer)
-    `∂C/∂b^[l] = (1/m)  sum(δ^[l])`
-
-4.  Gradient of Cost w.r.t. Weights (`W`):
-    (The error of the layer, scaled by its input)
-    `∂C/∂W^[l] = (1/m)  (δ^[l] @ (a^[l-1]).T)`
-
-
-
- 6. Gradient Descent (Weight & Bias Update)
-
-For each layer `l` in the network, after calculating the gradients:
-
--   Update Weights:
-    `W^[l] = W^[l] - α  ∂C/∂W^[l]`
-
--   Update Biases:
-    `b^[l] = b^[l] - α  ∂C/∂b^[l]`
-
-(Where `α` is the learning rate)
+Maps floating-point weights $x \in [\alpha, \beta]$ to 8-bit unsigned integers $q \in [0, 255]$:
+$$S = \frac{\beta - \alpha}{255}, \qquad Z = \text{round}\left(-\frac{\alpha}{S}\right)$$
+$$\text{Quantize: } q = \text{clamp}\left(\text{round}\left(\frac{x}{S}\right) + Z, 0, 255\right)$$
+$$\text{Dequantize: } \hat{x} = (q - Z) \times S$$
+- **Latency Gain**: INT8 Tensor Cores yield up to $3\times$ higher inference throughput and $75\%$ reduction in memory bandwidth.

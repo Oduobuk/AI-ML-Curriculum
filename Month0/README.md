@@ -1,164 +1,58 @@
-Month 0: Essential Foundations for AI/ML
-Programming & Mathematics Fundamentals
+# Month 0: Essential Foundations for AI Engineering
+## Modern Programming & Mathematical Engine
 
-Welcome! This month is designed specifically for complete beginners in programming and mathematics. We'll lay a rock-solid foundation that will make the rest of the curriculum much more accessible and enjoyable.
+![Month 0 Foundations](../docs/images/month0_foundations.png)
 
-Time Investment: 4 weeks
-Difficulty Level: Beginner-friendly
-Prerequisites: None! (Just curiosity and willingness to learn)
+Welcome to Month 0! This preparatory foundation is engineered for students starting or formalizing their journey in Applied AI and Machine Learning. 
 
-🎯 Why Month 0 Matters
+Rather than teaching generic syntax or abstract math in isolation, Month 0 connects modern developer ergonomics (**`uv`**, **typed Python**, **Pydantic**) directly to the computational primitives required for modern machine learning (**tensors, automatic differentiation, and vectorization**).
 
-Machine learning builds on programming and mathematical concepts. Even if you've never programmed before, spending 4 weeks here will:
-- ✅ Make you comfortable with Python syntax and logic
-- ✅ Build intuition for the math concepts you'll encounter in Month 1+
-- ✅ Give you confidence before diving into AI/ML topics
-- ✅ Save you frustration later when topics use these fundamentals
+---
 
-This is not wasted time—it's an investment in your success.
+## 🎯 Learning Objectives & Success Criteria
+By the end of Month 0, students will:
+* **Master Modern Tooling:** Set up reproducible Python 3.11+ environments using `uv` and lint clean code with Ruff.
+* **Write Production Python:** Construct modular functions, leverage list/dictionary comprehensions, and enforce data schemas with **Pydantic v2**.
+* **Understand Tensors & Operations:** Manipulate multi-dimensional arrays in NumPy, master broadcasting rules, and execute matrix transformations.
+* **Master Optimization Intuition:** Understand derivatives, the chain rule, and build a simple Gradient Descent optimizer from scratch.
 
-📚 Month 0 Curriculum Overview
+---
 
-Week 1: Programming Fundamentals & Python Basics
-Goal: Get comfortable with Python and basic programming logic
+## 📚 Curriculum Breakdown
 
-| Topic | Subtopics |
-|-------|-----------|
-| What is Programming? | Computing concepts, algorithms, problem-solving |
-| Setting Up Python | Installing Python, using the terminal/command line |
-| Python Basics | Variables, data types (int, float, string, bool) |
-| Operations & Expressions | Arithmetic, string operations, type conversion |
-| Getting Output | print() function, debugging |
+### [Week 1: Modern Python Toolchain & Programming Fundamentals](Week_1/lecture_notes/Week1_Python_Basics.md)
+* **Modern Developer Stack:** Installing Python 3.11+, using the blazing-fast `uv` package manager (`uv venv`, `uv pip`), terminal workflows, and Git essentials.
+* **Memory & Types:** Primitives (`int`, `float`, `str`, `bool`), type mutability vs immutability, variables as memory references.
+* **Arithmetic & Boolean Operations:** Mathematical operators, string formatting (f-strings), logical conditions (`and`, `or`, `not`).
+* **Deliverable:** Set up local Git repository with `uv`, build a typed CLI diagnostic calculator with automated input checking.
 
-Key Concepts: Variables, data types, operations, output
-Deliverable: Write simple Python programs (e.g., calculator, greeting program)
+### [Week 2: Control Flow, Functions & Structured Schemas](Week_2/lecture_notes/Week2_Control_Flow_Functions.md)
+* **Control Structures:** `if / elif / else` branching, `for` and `while` loops, iterators, `enumerate()`, and `zip()`.
+* **Data Collections & Comprehensions:** Lists, tuples, sets, dictionaries, nested structures, and memory-efficient comprehensions.
+* **Clean Functional Design:** Defining functions, type hints (`typing.Optional`, `typing.List`, `typing.Dict`), default arguments, `*args`, and `**kwargs`.
+* **Data Schema Validation with Pydantic:** Moving beyond raw dictionaries; defining validated schemas for AI input payloads.
+* **Deliverable:** Write a validated data preprocessor that ingests dirty JSON dictionaries, validates them using Pydantic models, and filters anomalies.
 
-Week 2: Control Flow & Functions
-Goal: Master decision-making and code reusability
+### [Week 3: Linear Algebra & Tensors from Scratch](Week_3/lecture_notes/Week3_Math_Part1.md)
+* **Scalars, Vectors, and Matrices:** Geometric representation, magnitudes, Euclidean distance, and cosine similarity intuition.
+* **Tensor Dimensions & NumPy:** Creating 1D, 2D, and 3D arrays, indexing, slicing, reshaping, and contiguous memory layouts.
+* **Tensor Broadcasting:** Understanding how arrays of different shapes interact arithmetic-wise.
+* **Matrix Multiplication:** Dot product mechanics, why $A \times B$ requires inner dimensions to match, and vectorizing batch calculations.
+* **Deliverable:** Implement vector cosine similarity and matrix multiplication from scratch in pure Python, then benchmark against vectorized NumPy.
 
-| Topic | Subtopics |
-|-------|-----------|
-| Conditional Logic | if/elif/else statements, boolean logic (and, or, not) |
-| Loops | for loops, while loops, loop control (break, continue) |
-| Lists & Dictionaries | Creating, indexing, iterating, common methods |
-| Functions | Defining functions, parameters, return values, scope |
-| Code Organization | Writing clean, readable code |
+### [Week 4: Calculus, Autodiff & Probability for Machine Learning](Week_4/lecture_notes/Week4_Math_Part2.md)
+* **Calculus of Optimization:** Slopes, limits, single-variable derivatives, power rule, and exponential/log derivatives.
+* **Multivariable Calculus & Gradients:** Partial derivatives, the gradient vector ($\nabla f$), and the Chain Rule for composite functions.
+* **Gradient Descent Intuition:** Loss surfaces, learning rates, step updates ($w \leftarrow w - \alpha \frac{\partial L}{\partial w}$), and convergence.
+* **Descriptive Statistics & Probability:** Mean, median, standard deviation, normal distributions, conditional probability, and Bayes' Theorem.
+* **Deliverable:** Build an end-to-end 1D Gradient Descent visualizer in Python that optimizes a quadratic cost function step-by-step.
 
-Key Concepts: Conditionals, loops, data structures, functions
-Deliverable: Functions that manipulate lists and dictionaries
+---
 
-Week 3: Essential Math for AI/ML (Part 1)
-Goal: Build intuition for mathematical foundations
-
-| Topic | Subtopics |
-|-------|-----------|
-| Numbers & Algebra | Exponents, logarithms, basic equations, solving for x |
-| Functions & Graphs | Linear functions, slopes, intercepts, plotting |
-| Basic Statistics | Mean, median, mode, standard deviation, distributions |
-| Probability Basics | Probability rules, conditional probability, independence |
-| Python for Math | Using libraries: NumPy, Matplotlib |
-
-Key Concepts: Functions, distributions, probability, visualization
-Deliverable: Calculate statistics, create plots, understand probability
-
-Week 4: Essential Math for AI/ML (Part 2)
-Goal: Understand vectors, matrices, and calculus basics
-
-| Topic | Subtopics |
-|-------|-----------|
-| Vectors & Matrices | What they are, operations, matrix multiplication |
-| Dot Products | Geometric interpretation, applications |
-| Linear Transformations | How matrices transform vectors, intuition |
-| Calculus Fundamentals | Derivatives, rates of change, optimization |
-| Connecting Math to ML | How these concepts apply to machine learning |
-
-Key Concepts: Vectors, matrices, derivatives, optimization
-Deliverable: Perform matrix operations, compute derivatives, optimize functions
-
-🏗️ How to Use Month 0
-
-For Each Week:
-1. Start with Lecture Notes - Read through the core concepts
-2. Study the Cheatsheet - Keep quick reference guide handy
-3. Work Through Exercises - Apply concepts as you learn
-4. Complete the Assignment - Comprehensive practice
-5. Test Your Understanding - Answer assessment questions
-
-Recommended Weekly Schedule:
-- Monday-Wednesday: Lecture notes + Exercises (60-90 min/day)
-- Thursday-Friday: Assignment + Additional practice (90-120 min/day)
-- Weekend: Review, consolidate, ask questions
-
-Learning Tips:
-- 💡 Embrace confusion - It's part of learning. Google is your friend!
-- 💡 Type code manually - Don't copy-paste; typing helps muscle memory
-- 💡 Experiment - Break things intentionally, see what happens
-- 💡 Test frequently - Run your code after every few lines
-- 💡 Use the community - Ask questions in forums, Discord, etc.
-
-📖 Resources
-
-Python Setup
-- [Python Official Website](https://www.python.org/)
-- [Installing Python](https://realpython.com/installing-python/)
-- [Python IDLE/Anaconda](https://www.anaconda.com/)
-
-Free Online Platforms
-- [Python Tutor](https://pythontutor.com/) - Visualize code execution
-- [Replit](https://replit.com/) - Code in browser
-- [Kaggle Learn](https://www.kaggle.com/learn) - Micro-courses
-- [Khan Academy](https://www.khanacademy.org/) - Math concepts
-
-Books (Free Resources)
-- "Automate the Boring Stuff with Python" (free online)
-- Khan Academy mathematics courses
-
-Communities
-- Stack Overflow - Answer programming questions
-- Reddit: r/learnprogramming, r/Python
-- Discord: Various Python learning communities
-
-✅ Success Criteria
-
-By the end of Month 0, you should be able to:
-
-- ✅ Write Python programs using variables, loops, and functions
-- ✅ Understand and apply conditional logic
-- ✅ Work with lists and dictionaries
-- ✅ Perform basic mathematical operations and understand statistics
-- ✅ Visualize data with plots
-- ✅ Perform vector and matrix operations
-- ✅ Understand derivatives and optimization at a conceptual level
-- ✅ Most importantly: Feel confident moving into Month 1!
-
-📋 Quick Navigation
-
-| Week | Focus | Key Files |
-|------|-------|-----------|
-| Week 1 | Python Basics | [Lecture Notes](Week1/lecturenotes/) \| [Exercises](Week1/exercises/) \| [Assignment](Week1/assignments/) |
-| Week 2 | Control Flow & Functions | [Lecture Notes](Week2/lecturenotes/) \| [Exercises](Week2/exercises/) \| [Assignment](Week2/assignments/) |
-| Week 3 | Math Part 1 (Stats & Probability) | [Lecture Notes](Week3/lecturenotes/) \| [Exercises](Week3/exercises/) \| [Assignment](Week3/assignments/) |
-| Week 4 | Math Part 2 (Linear Algebra & Calculus) | [Lecture Notes](Week4/lecturenotes/) \| [Exercises](Week4/exercises/) \| [Assignment](Week4/assignments/) |
-
-🎓 What's Next?
-
-After completing Month 0, you'll be ready to move to Month 1: Foundations of AI, Programming, and Data, where we dive into:
-- Advanced Python for data science
-- Working with real datasets
-- Introduction to AI/ML concepts
-- Version control and professional workflows
-
-📞 Support
-
-- 💬 Post questions in the course forum
-- 🐛 Stuck on an exercise? Check the solutions first, then ask
-- 📧 Email instructors if you need additional help
-- 🤝 Study groups form naturally—find your peers!
-
-🚀 Let's Get Started!
-
-Take a deep breath. Learning to code and master math is achievable for everyone. Each concept builds on the previous one. You've got this! 
-
-Start with Week 1 → [Python Basics - Lecture Notes](Week1/lecturenotes/)
-
-Good luck! 🎉
+## 🛠️ Month 0 Weekly Quick-Links
+| Week | Lecture Notes | Exercises | Assignments | Cheatsheets |
+| :--- | :--- | :--- | :--- | :--- |
+| **Week 1** | [Notes](Week_1/lecture_notes/Week1_Python_Basics.md) | [Exercises](Week_1/exercises/Week1_Exercises.md) | [Assignment](Week_1/assignments/Week1_Assignment.md) | [Cheatsheet](Week_1/cheatsheets/Week1_Cheatsheet.md) |
+| **Week 2** | [Notes](Week_2/lecture_notes/Week2_Control_Flow_Functions.md) | [Exercises](Week_2/exercises/Week2_Exercises.md) | [Assignment](Week_2/assignments/Week2_Assignment.md) | [Cheatsheet](Week_2/cheatsheets/Week2_Cheatsheet.md) |
+| **Week 3** | [Notes](Week_3/lecture_notes/Week3_Math_Part1.md) | [Exercises](Week_3/exercises/Week3_Exercises.md) | [Assignment](Week_3/assignments/Week3_Assignment.md) | [Cheatsheet](Week_3/cheatsheets/Week3_Cheatsheet.md) |
+| **Week 4** | [Notes](Week_4/lecture_notes/Week4_Math_Part2.md) | [Exercises](Week_4/exercises/Week4_Exercises.md) | [Assignment](Week_4/assignments/Week4_Assignment.md) | [Cheatsheet](Week_4/cheatsheets/Week4_Cheatsheet.md) |

@@ -1,48 +1,54 @@
-Cheatsheet: Advanced Computer Vision
-
- Transfer Learning
-
-A technique where a model pre-trained on a large dataset (e.g., ImageNet) is reused for a new, related task.
-
-| Method | Description | When to Use |
-| :--- | :--- | :--- |
-| Feature Extraction | Use the convolutional base of the pre-trained model to extract features. Freeze the base and train only a new, custom classifier on top. | Smaller dataset, computationally limited, dataset is similar to the original. |
-| Fine-Tuning | In addition to training a new classifier, unfreeze the top few layers of the pre-trained base and train them with a very low learning rate. | Larger dataset, more computational power, dataset is somewhat different from the original. |
-
-Keras Implementation:
-- Load a model from `tf.keras.applications` with `include_top=False`.
-- Freeze layers by setting `layer.trainable = False`.
-- Add your own `Flatten`, `Dense`, and output layers.
-- For fine-tuning, unfreeze some layers (`layer.trainable = True`) and re-compile with a very low learning rate optimizer like `SGD`.
+# Month 4, Week 2 Cheatsheet: Open LLMs, Weight Quantization & vLLM Serving Architecture
 
 ---
 
- Object Detection
+## 1. Post-Training Quantization (PTQ) Paradigms: RTN vs GPTQ vs AWQ
 
-Identifies and localizes multiple objects in an image with bounding boxes.
+| Quantization Method | Granularity | Outlier Handling Strategy | Perplexity Degradation (4-bit) |
+|:---|:---|:---|:---|
+| **Round-To-Nearest (RTN)** | Uniform / Group | None (clips outliers) | Catastrophic on $< 13\text{B}$ models |
+| **GPTQ (Frantar et al.)** | Layer-wise | Second-order inverse Hessian compensation | Minimal; requires calibration data |
+| **AWQ (Lin et al.)** | Per-channel scale | Scales salient activation channels $W' = W \cdot S$ | Near-lossless; preserves salient weights |
 
-| Family | Approach | Key Characteristics | Famous Models |
-| :--- | :--- | :--- | :--- |
-| Two-Stage | 1. Propose Regions of Interest (RoIs). 2. Classify each region. | High accuracy, but slower. | R-CNN, Fast R-CNN, Faster R-CNN |
-| One-Stage | Treats detection as a single regression problem (predicts boxes and classes directly from the image). | Extremely fast (real-time), but can be less accurate for small objects. | YOLO, SSD |
-
----
-
- Semantic Segmentation
-
-Classifies every single pixel in an image to a specific class, creating a pixel-level mask.
-
- U-Net Architecture
-A popular U-shaped architecture for segmentation.
-- Contracting Path (Encoder): A standard CNN that downsamples the image to extract context features. Consists of `Conv2D` and `MaxPooling2D` layers.
-- Expansive Path (Decoder): Symmetrically upsamples the feature map to recover spatial resolution for localization. Uses "up-convolution" or `Conv2DTranspose`.
-- Skip Connections: The key innovation. Feature maps from the encoder are concatenated with feature maps in the decoder. This allows the decoder to use high-resolution features from the encoder to produce more precise segmentations.
+### Activation-Aware Weight Quantization (AWQ) Core Principle
+A tiny fraction ($0.1\%$) of hidden channels carry salient feature information. Instead of keeping them in FP16, AWQ scales them:
+$$W \cdot X = (W \cdot \text{diag}(s)) \cdot (\text{diag}(s)^{-1} X)$$
+- $s = s_X^\alpha$ where $s_X = \max |X|$ across the batch.
+- Protects salient weights from INT4 rounding truncation without hardware-unfriendly mixed precision.
 
 ---
 
- Famous Architectures
+## 2. Virtual Memory PagedAttention (vLLM Architecture)
 
-| Architecture | Key Innovation | Best For |
-| :--- | :--- | :--- |
-| Inception (GoogLeNet) | Inception Module: Performs convolutions of different sizes (1x1, 3x3, 5x5) in parallel and concatenates the results. Captures features at multiple scales efficiently. | High accuracy with computational efficiency. |
-| MobileNet | Depthwise Separable Convolutions: Factors a standard convolution into a depthwise convolution and a 1x1 pointwise convolution. Drastically reduces computation. | Mobile and embedded devices where resources are limited. |
+Eliminates memory waste from dynamic sequence length allocation:
+
+```
+               Logical Token Sequence vs Physical Memory Blocks
+ ┌────────────────────────────────────────────────────────┐
+ │ Logical Tokens: [t0, t1, t2 ... t15] [t16 ... t31]     │
+ └──────────────────────────┬─────────────────────────────┘
+                            │ Virtual-to-Physical Block Table
+                            ▼
+ ┌───────────────────┬───────────────────┬────────────────┐
+ │ Physical Block 7  │ Physical Block 2  │ Free Block 12  │
+ │ (Tokens 0-15)     │ (Tokens 16-31)    │ (Unallocated)  │
+ └───────────────────┴───────────────────┴────────────────┘
+ (Zero external fragmentation; dynamically allocates physical blocks on demand)
+```
+
+---
+
+## 3. Iteration-Level Continuous Batching (Orca / vLLM)
+
+Static batching blocks an entire batch until the longest request completes generation. Continuous batching operates at the iteration level:
+- New requests enter the batch at the very next decoding step.
+- Finished requests leave immediately upon generating `<EOS>` or reaching `max_tokens`.
+- Saturates GPU compute utilization ($> 85\%$).
+
+---
+
+## 4. Serving Performance Latency Metrics
+
+- **Time-To-First-Token (TTFT)**: Latency from HTTP request arrival to the emission of the first streamed token (governed by prefill FLOPs).
+- **Inter-Token Latency (ITL)**: Time between successive tokens during generation (governed by memory bandwidth).
+- **Throughput**: Global tokens generated per second across all concurrent client streams.

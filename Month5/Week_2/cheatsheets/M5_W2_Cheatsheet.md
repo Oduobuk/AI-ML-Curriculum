@@ -1,45 +1,96 @@
-Month 5, Week 2: MLOps Cheatsheet
+# Month 5, Week 2 Cheatsheet: Multi-Agent Systems, LangGraph Cycles & Model Context Protocol (MCP)
 
- MLOps Principles
+---
 
-| Principle | Description |
-| :--- | :--- |
-| Automation | Automate every step of the ML lifecycle, from data ingestion to model deployment. |
-| CI/CD/CT | Continuous Integration (CI), Continuous Delivery (CD), and Continuous Training (CT) adapted for ML. |
-| Versioning | Version control for data, code, and models to ensure reproducibility. |
-| Monitoring | Continuously monitor model performance, data drift, and system health in production. |
-| Collaboration | Foster collaboration between data scientists, ML engineers, and operations teams. |
-| Governance | Establish processes for model review, approval, and compliance. |
+## 1. LangGraph Cyclic State Graph Architecture
 
- The MLOps Lifecycle
+Autonomous multi-agent collaboration requires cyclic topologies with state immutability:
 
-1.  Data Ingestion & Preparation: Building robust and automated data pipelines.
-2.  Model Training & Tuning: Experiment tracking, hyperparameter tuning, and model versioning.
-3.  Model Validation & Testing: Evaluating model performance on unseen data and testing for fairness, bias, and security.
-4.  Model Packaging & Registry: Packaging the model and its dependencies and storing it in a central model registry.
-5.  Model Deployment & Serving: Deploying the model to a production environment for inference.
-6.  Model Monitoring & Observability: Tracking model performance and detecting issues in production.
-7.  Model Retraining: Automatically retraining and redeploying models as new data becomes available or performance degrades.
+```
+                      LangGraph Cyclic Multi-Agent Workflow
+                 ┌───────────────────────────────────────┐
+                 │          User Task Ingestion          │
+                 └───────────────────┬───────────────────┘
+                                     │
+                                     ▼
+                 ┌───────────────────────────────────────┐
+                 │             Planner Node              │
+                 └───────────────────┬───────────────────┘
+                                     │
+                                     ▼
+                 ┌───────────────────────────────────────┐
+                 │       Developer / Tool Node           │◄────────┐
+                 └───────────────────┬───────────────────┘         │
+                                     │                             │
+                                     ▼                             │ (Reject)
+                 ┌───────────────────────────────────────┐         │
+                 │          Security Auditor Node        ├─────────┘
+                 └───────────────────┬───────────────────┘
+                                     │ (Pass)
+                                     ▼
+                 ┌───────────────────────────────────────┐
+                 │            END / Final Output         │
+                 └───────────────────────────────────────┘
+```
 
- Key Tools & Technologies
+### State Reducers with `Annotated`
+```python
+from typing import TypedDict, Annotated, List
+import operator
 
-| Category | Tools |
-| :--- | :--- |
-| Data Versioning | DVC, Pachyderm, Dolt |
-| Experiment Tracking | MLflow, Weights & Biases, Comet, Neptune |
-| Pipeline Orchestration | Kubeflow Pipelines, Apache Airflow, TFX |
-| Model Registry | MLflow Model Registry, AWS SageMaker Model Registry, Google AI Platform Models |
-| Model Serving | TensorFlow Serving, TorchServe, Seldon Core, KServe (formerly KFServing) |
-| Monitoring | Prometheus, Grafana, Evidently AI, Fiddler |
-| CI/CD | GitHub Actions, GitLab CI/CD, Jenkins |
-| Infrastructure | Docker, Kubernetes, AWS, Google Cloud, Azure |
+class AgentState(TypedDict):
+    # Appends new messages rather than overwriting
+    messages: Annotated[List[dict], operator.add]
+    current_agent: str
+    cycle_counter: int
+    is_approved: bool
+```
 
- Deployment Strategies
+---
 
-| Strategy | Description | Use Case |
-| :--- | :--- | :--- |
-| Batch Inference | Predictions are generated periodically on a batch of data. | Non-real-time applications like product recommendations, customer segmentation. |
-| Real-time Inference | Predictions are generated on-demand as new data arrives. | Real-time applications like fraud detection, dynamic pricing. |
-| Edge Deployment | The model is deployed directly on an edge device (e.g., smartphone, IoT device). | Applications requiring low latency and offline capabilities. |
-| Canary Deployment | The new model version is rolled out to a small subset of users before a full rollout. | Minimizing the risk of deploying a faulty model. |
-| A/B Testing | Multiple model versions are deployed simultaneously to different user groups to compare their performance. | Selecting the best-performing model based on real-world metrics. |
+## 2. Model Context Protocol (MCP) JSON-RPC 2.0 Standard
+
+Standardizes how LLMs invoke external tools over stdio/HTTP:
+
+### 1. `tools/list` Response Schema
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "tools": [
+      {
+        "name": "query_database",
+        "description": "Execute read-only SQL query on analytics warehouse",
+        "inputSchema": {
+          "type": "object",
+          "properties": {"sql": {"type": "string"}},
+          "required": ["sql"]
+        }
+      }
+    ]
+  }
+}
+```
+
+### 2. `tools/call` Invocation Schema
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "query_database",
+    "arguments": {"sql": "SELECT COUNT(*) FROM users;"}
+  }
+}
+```
+
+---
+
+## 3. Human-in-the-Loop Checkpoint State Interruption
+
+For high-risk operations (financial transactions, data deletion), pause execution:
+- **Breakpoint Configuration**: Graph pauses before node execution (`interrupt_before=["wire_transfer_node"]`).
+- **Thread Checkpoint Persistence**: Saves state snapshot to SQLite/Postgres.
+- **Resumption**: Human reviewer inspects state, approves/edits, and calls `app.update_state()` to resume.

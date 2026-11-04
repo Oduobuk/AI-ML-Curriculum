@@ -1,118 +1,104 @@
-# Week 4 Cheatsheet: Basic Plotting with Matplotlib
+# Month 1, Week 4 Cheatsheet: Exploratory Data Analysis, Feature Drift & Dashboard Architecture
 
-`matplotlib.pyplot` is a collection of functions that make matplotlib work like MATLAB. It's the most common way to create plots. We typically import it with the alias `plt`.
+---
+
+## 1. Covariate Shift & Population Stability Index (PSI)
+
+Quantifies statistical divergence between baseline training distribution $P$ and live inference distribution $Q$:
+$$\text{PSI} = \sum_{k=1}^K (Q_k - P_k) \times \ln\left(\frac{Q_k}{P_k}\right)$$
+
+### Alert Threshold Matrix
+| PSI Value | Classification | Production Operational Action |
+|:---|:---|:---|
+| **$\text{PSI} < 0.10$** | Insignificant / Stable | Baseline operations normal; no action required. |
+| **$0.10 \le \text{PSI} \le 0.25$** | Moderate Drift | Monitor closely; trigger automated telemetry alerts. |
+| **$\text{PSI} > 0.25$** | Significant / Severe Drift | **Halt live predictions**; trigger continuous model re-training. |
 
 ```python
-import matplotlib.pyplot as plt
+import numpy as np
+
+def calculate_psi(baseline: np.ndarray, target: np.ndarray, bins: int = 10, eps: float = 1e-4) -> float:
+    quantiles = np.linspace(0, 100, bins + 1)
+    bin_edges = np.percentile(baseline, quantiles)
+    bin_edges[0], bin_edges[-1] = -np.inf, np.inf
+    
+    P, _ = np.histogram(baseline, bins=bin_edges)
+    Q, _ = np.histogram(target, bins=bin_edges)
+    
+    p_norm = np.clip(P / len(baseline), eps, 1.0)
+    q_norm = np.clip(Q / len(target), eps, 1.0)
+    p_norm /= p_norm.sum()
+    q_norm /= q_norm.sum()
+    
+    return float(np.sum((q_norm - p_norm) * np.log(q_norm / p_norm)))
 ```
 
 ---
 
-## The Basic Plotting Workflow
+## 2. Statistical Hypothesis Tests for Drift
 
-Creating a simple plot follows a standard sequence of steps:
-
-1.  **Prepare Data:** Put your data into Python lists or NumPy arrays.
-2.  **Create Plot:** Call a plotting function (e.g., `plt.plot()`, `plt.bar()`) to create the plot.
-3.  **Customize:** Add titles, labels, and other customizations.
-4.  **Show/Save:** Display the plot on the screen or save it to a file.
-
----
-
-## Common Plot Types
-
-### Line Plot
-Used to show trends over time or continuous data.
-
+### Two-Sample Kolmogorov-Smirnov (KS) Test
+Nonparametric test comparing empirical cumulative distribution functions $F_{\text{base}}(x)$ and $F_{\text{curr}}(x)$:
+$$D = \sup_x |F_{\text{base}}(x) - F_{\text{curr}}(x)|$$
 ```python
-x_values = [0, 1, 2, 3, 4]
-y_values = [0, 1, 4, 9, 16]
+from scipy.stats import ks_2samp
 
-plt.plot(x_values, y_values)
-```
-
-### Bar Chart
-Used to compare quantities among different categories.
-
-```python
-categories = ['A', 'B', 'C']
-values = [10, 25, 15]
-
-plt.bar(categories, values)
-```
-
-### Scatter Plot
-Used to show the relationship between two numerical variables.
-
-```python
-x_coords = [1, 2, 3, 4, 5]
-y_coords = [5, 7, 6, 8, 7]
-
-plt.scatter(x_coords, y_coords)
+stat, p_value = ks_2samp(baseline_feature, live_feature)
+# Reject null hypothesis of identical distributions if p_value < 0.05
 ```
 
 ---
 
-## Essential Customization Functions
+## 3. Non-Linear Correlation & Mutual Information
 
-These functions are called *after* creating the plot but *before* showing it.
-
-*   **`plt.figure(figsize=(width, height))`**
-    *   Optional: Creates a new figure and allows you to set its size in inches. Good practice to start with this.
-    *   Example: `plt.figure(figsize=(10, 6))`
-
-*   **`plt.title("My Awesome Plot")`**
-    *   Adds a title to the top of the plot.
-
-*   **`plt.xlabel("My X-axis Label")`**
-    *   Adds a label to the X-axis.
-
-*   **`plt.ylabel("My Y-axis Label")`**
-    *   Adds a label to the Y-axis.
-
-*   **`plt.legend()`**
-    *   Displays a legend on the plot. You must add a `label` to each plot element for the legend to work.
-    *   Example: `plt.plot(x, y, label="Model 1")`
-
-*   **`plt.grid(True)`**
-    *   Adds a grid to the background of the plot.
-
-*   **`plt.tight_layout()`**
-    *   Adjusts plot parameters for a tight layout, often fixing issues with labels being cut off.
-
----
-
-## Showing and Saving
-
-*   **`plt.show()`**
-    *   Displays the plot in a new window. This should typically be the last line of your script.
-
-*   **`plt.savefig("my_plot.png")`**
-    *   Saves the current figure to a file. You can use different extensions like `.png`, `.jpg`, `.pdf`, etc.
-    *   **Important:** Call this *before* `plt.show()`, as `plt.show()` clears the figure.
-
----
-
-## Full Example
+Pearson's $r$ measures strictly linear dependency ($r \approx 0$ for $y = x^2$):
+$$\text{Mutual Information: } I(X; Y) = \iint p(x, y) \ln \frac{p(x, y)}{p(x) p(y)} \, dx \, dy$$
 
 ```python
-import matplotlib.pyplot as plt
+from sklearn.feature_selection import mutual_info_regression
 
-# 1. Prepare Data
-model_names = ['Model A', 'Model B', 'Model C']
-accuracies = [85, 92, 78]
+# Captures arbitrary non-linear and sinusoidal associations
+mi_scores = mutual_info_regression(X_features, y_target)
+```
 
-# 2. Create Plot
-plt.figure(figsize=(8, 5)) # Optional: set figure size
-plt.bar(model_names, accuracies, color='skyblue')
+---
 
-# 3. Customize
-plt.title('Model Accuracy Comparison')
-plt.xlabel('Model')
-plt.ylabel('Accuracy (%)')
-plt.ylim(0, 100) # Set Y-axis limits
+## 4. Vectorized Dataset Profiling in Polars
 
-# 4. Show/Save
-plt.savefig('accuracy_chart.png')
-plt.show()
+Processes 1,000,000+ rows in $< 100\text{ ms}$:
+```python
+import polars as pl
+
+numeric_cols = [c for c, dt in zip(df.columns, df.dtypes) if dt.is_numeric()]
+
+profile_summary = df.select([
+    pl.col(c).null_count().alias(f"{c}__nulls") for c in numeric_cols
+] + [
+    pl.col(c).mean().alias(f"{c}__mean") for c in numeric_cols
+] + [
+    pl.col(c).std().alias(f"{c}__std") for c in numeric_cols
+] + [
+    pl.col(c).skew().alias(f"{c}__skew") for c in numeric_cols
+])
+```
+
+---
+
+## 5. Production Streamlit Telemetry Dashboard Pattern
+
+```python
+import streamlit as st
+import polars as pl
+
+st.set_page_config(page_title="Model Telemetry Monitor", layout="wide")
+st.title("Enterprise Feature Drift & Data Quality Monitor")
+
+col1, col2, col3 = st.columns(3)
+col1.metric("Features Monitored", "42")
+col2.metric("Max Feature PSI", "0.284", delta="Drift Alert", delta_color="inverse")
+col3.metric("Throughput", "2,400 req/s")
+
+# Display distribution overlay
+feature_selected = st.selectbox("Select Feature for Distribution Overlay", ["latency_ms", "token_count"])
+# Render interactive chart...
 ```

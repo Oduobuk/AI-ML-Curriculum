@@ -1,40 +1,67 @@
-Cheatsheet: Recurrent Neural Networks (RNNs)
-
- The Problem with Sequential Data
-Traditional neural networks process inputs independently. RNNs are designed for sequential data (e.g., text, time series, speech) where context and order matter. They do this by using a hidden state (a form of memory) that is passed from one timestep to the next.
+# Month 4, Week 3 Cheatsheet: Vector Databases, HNSW Indexing & Core RAG
 
 ---
 
- Core RNN Architectures
+## 1. Vector Distance & Similarity Metrics
 
-| Layer | Key Idea | Pros | Cons | Keras Layer |
-| :--- | :--- | :--- | :--- | :--- |
-| Simple RNN | A basic loop. The output at time `t` is a function of the input at `t` and the hidden state from `t-1`. | Simple, computationally cheap. | Suffers from vanishing/exploding gradients. Cannot learn long-term dependencies. | `SimpleRNN` |
-| LSTM | A more complex unit with a dedicated cell state (long-term memory) and three "gates" to control information flow. | Solves the vanishing gradient problem. Can learn very long-term dependencies. | More parameters, computationally more expensive than GRU. | `LSTM` |
-| GRU | A simplified version of LSTM. Combines the forget and input gates into a single update gate. | Also solves the vanishing gradient problem. Fewer parameters and faster to train than LSTM, with often comparable performance. | Slightly less expressive than LSTM on some tasks. | `GRU` |
+For two embedding vectors $u, v \in \mathbb{R}^d$:
 
----
-
- The Vanishing / Exploding Gradient Problem
-- Why it happens: In a simple RNN, gradients are repeatedly multiplied by the same weight matrix as they are backpropagated through time.
-- Vanishing Gradient: If weights are small (<1), the gradient signal shrinks exponentially, preventing the network from learning long-range dependencies. This is the more common problem.
-- Exploding Gradient: If weights are large (>1), the gradient signal grows exponentially, leading to unstable training.
-- Solutions:
-    1.  Gradient Clipping: A simple fix for exploding gradients. If a gradient's norm exceeds a threshold, it is scaled down.
-    2.  Gated Architectures (LSTMs/GRUs): The primary solution for the vanishing gradient problem. Their gating mechanisms allow gradients to flow more easily through time.
+| Metric | Mathematical Formula | Range | Normalization Invariant |
+|:---|:---|:---|:---|
+| **Cosine Similarity** | $\frac{u \cdot v}{\|u\|_2 \|v\|_2}$ | $[-1.0, 1.0]$ | Invariant to vector magnitude |
+| **Dot Product** | $\sum_{i=1}^d u_i v_i$ | $(-\infty, \infty)$ | Equals Cosine Similarity if $\|u\|=\|v\|=1$ |
+| **Euclidean Distance ($L_2$)** | $\sqrt{\sum_{i=1}^d (u_i - v_i)^2}$ | $[0, \infty)$ | Monotonically related to Dot Product for unit vectors |
 
 ---
 
- LSTM & GRU Gates
+## 2. Hierarchical Navigable Small World (HNSW) Indexing
 
- LSTM (Long Short-Term Memory)
-An LSTM cell has three gates and a cell state:
-1.  Forget Gate (Sigmoid): Decides what information to throw away from the cell state.
-2.  Input Gate (Sigmoid & Tanh): Decides what new information to store in the cell state.
-3.  Output Gate (Sigmoid & Tanh): Decides what to output from the cell state to the hidden state.
-- Cell State: The "conveyor belt" of memory. Information can flow along it with minimal changes, allowing long-term dependencies to be preserved.
+Constructs a multi-layer geometric graph enabling sub-linear $O(\log N)$ approximate nearest neighbor search:
 
- GRU (Gated Recurrent Unit)
-A GRU cell has two gates and no separate cell state:
-1.  Update Gate (Sigmoid): Acts like a combination of the forget and input gates. It decides how much of the past hidden state to keep and how much of the new candidate hidden state to use.
-2.  Reset Gate (Sigmoid): Decides how much of the past hidden state to forget when proposing a new candidate hidden state.
+```
+                    HNSW Multi-Layer Skip-Graph Hierarchy
+ Layer 2:     (node_1) ─────────────────────────────► (node_8)   [Long-distance skips]
+                 │                                       │
+ Layer 1:     (node_1) ──────────► (node_4) ────────► (node_8)   [Medium clusters]
+                 │                    │                  │
+ Layer 0:     (node_1) ──► (node_2)──►(node_4)──►(node_6)►(node_8)[Dense ground layer]
+```
+
+### Key HNSW Hyperparameters
+- **$M$**: Number of bidirectional edges per node (typically $16 - 64$). Higher $M$ increases recall and index size.
+- **`efConstruction`**: Size of dynamic candidate list during graph construction (typically $100 - 400$).
+- **`efSearch`**: Size of candidate queue during runtime query execution (balances latency vs recall).
+
+---
+
+## 3. Product Quantization (PQ) & Asymmetric Distance (ADC)
+
+Decomposes vectors into $M$ orthogonal subspaces, quantizing each to $K=256$ centroids:
+$$d_{\text{ADC}}(q, x) = \sqrt{\sum_{m=1}^M \|q_m - c_{m, k_m}\|_2^2}$$
+- Compresses 1536-dimensional FP32 vectors ($6,144$ bytes) into 64 bytes ($96\times$ compression).
+- Precomputes an $M \times 256$ distance lookup table from query $q$ to centroids; distance lookups require zero floating-point operations.
+
+---
+
+## 4. Multi-Tenant Payload Filtering Architecture (Qdrant)
+
+Always execute vector search with strict boolean pre-filtering to prevent cross-tenant data leaks:
+```python
+from qdrant_client import QdrantClient
+from qdrant_client.http import models
+
+client = QdrantClient(url="http://localhost:6333")
+
+results = client.search(
+    collection_name="enterprise_knowledge",
+    query_vector=query_embedding,
+    query_filter=models.Filter(
+        must=[
+            models.FieldCondition(key="tenant_id", match=models.MatchValue(value="client_alpha")),
+            models.FieldCondition(key="department", match=models.MatchValue(value="FINANCE")),
+            models.FieldCondition(key="access_level", range=models.Range(lte=3))
+        ]
+    ),
+    limit=5
+)
+```

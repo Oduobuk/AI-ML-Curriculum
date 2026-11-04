@@ -1,57 +1,54 @@
-Month 4, Week 1 Cheatsheet: CNN Fundamentals
-
- Core CNN Layers & Operations
-
-| Operation         | Purpose                                                              | Key Parameters                                                              |
-| ----------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Convolution   | Extracts features by sliding a filter over the input.                | `Number of Filters`, `Filter Size` (e.g., 3x3), `Stride`, `Padding`         |
-| Activation (ReLU) | Introduces non-linearity. `ReLU(x) = max(0, x)`.                     | None. Applied element-wise after convolution.                               |
-| Pooling (Max) | Downsamples feature maps to reduce computation and add invariance.   | `Pool Size` (e.g., 2x2), `Stride`                                           |
-| Flatten       | Converts the final 3D feature map volume into a 1D vector.           | None.                                                                       |
-| Dense (Fully Connected) | Performs classification based on the high-level features from flatten. | `Number of Neurons`                                                         |
+# Month 4, Week 1 Cheatsheet: Modern Decoder-Only Transformers, RoPE & KV-Caching
 
 ---
 
- The CNN Architecture Flow
+## 1. Modern Decoder Architecture Evolution (Vaswani 2017 vs Llama-3 2024+)
 
-A typical CNN for classification follows this pattern:
-
-Input Image -> `[CONV -> ReLU -> POOL]` -> `[CONV -> ReLU -> POOL]` -> ... -> Flatten -> Dense -> Dense (Softmax) -> Output Probabilities
-
-1.  Feature Learning: The `[CONV -> ReLU -> POOL]` blocks are repeated. Early blocks learn simple features (edges, colors). Deeper blocks learn complex features (eyes, textures, shapes).
-2.  Classification: The `Flatten` and `Dense` layers take the learned features and make a final prediction.
-
----
-
- Calculating Output Dimensions
-
-This formula is essential for designing your network architecture.
-
-Given:
--   `W_in`: Input Width/Height
--   `F`: Filter Size (e.g., 3 for a 3x3 filter)
--   `P`: Padding (the number of pixels added to each side of the input)
--   `S`: Stride
-
-The output width/height `W_out` of a Convolutional or Pooling layer is:
-
-`W_out = (W_in - F + 2P) / S + 1`
-
-Example:
--   Input: `32x32`
--   Filter: `5x5`
--   Padding: `2`
--   Stride: `1`
--   `W_out = (32 - 5 + 22) / 1 + 1 = (32 - 5 + 4) / 1 + 1 = 31 + 1 = 32`
-    - The output size is `32x32`. This is a common setup to preserve the spatial dimensions.
+| Architectural Component | Original Transformer (2017) | Modern Open LLM (Llama-3 / Gemma) | Motivation & Benefit |
+|:---|:---|:---|:---|
+| **Positional Encoding** | Absolute Sinusoidal Table | Rotary Position Embedding (RoPE) | Relative token distance generalization across 128k+ contexts |
+| **Attention Pattern** | Multi-Head Attention (MHA) | Grouped-Query Attention (GQA) | $4-8\times$ reduction in KV cache memory footprint |
+| **Normalization** | Post-LayerNorm | Pre-RMSNorm | Eliminates activation explosion; saves $15\%$ compute |
+| **Feedforward Layer** | Standard ReLU / GELU | Gated SwiGLU | Superior empirical language modeling density |
 
 ---
 
- Key Terminology
+## 2. Rotary Position Embedding (RoPE) Mathematical Formulation
 
-    Filter / Kernel: A small matrix of weights that acts as a feature detector. The values in this matrix are what the network learns during training.
-    Feature Map / Activation Map: The output of a convolution operation. It shows where a specific feature was detected in the input.
-    Stride: The number of pixels the filter moves at a time as it slides across the input. A stride of `1` moves one pixel at a time. A stride of `2` skips every other pixel.
-    Padding: Adding a border of zeros around the input image. This is primarily used to control the output size and ensure the filter can be applied to the edges of the image.
-    Receptive Field: The area of the original input image that influences the activation of a single neuron in a given layer.
-    Channels: The depth of an image or feature map. An RGB image has 3 channels. A convolutional layer with 64 filters produces a feature map with 64 channels.
+Encodes position by rotating 2D query/key coordinate pairs in the complex plane:
+$$\mathbf{R}_{\Theta, m}^d = \text{diag}\left( R_{\theta_1, m}, R_{\theta_2, m}, \dots, R_{\theta_{d/2}, m} \right)$$
+where each $2 \times 2$ rotation block is:
+$$R_{\theta_i, m} = \begin{pmatrix} \cos(m \theta_i) & -\sin(m \theta_i) \\ \sin(m \theta_i) & \cos(m \theta_i) \end{pmatrix}, \qquad \theta_i = \theta_{\text{base}}^{-2(i-1)/d}$$
+- **Inner Product Property**:
+  $$\langle \mathbf{R}_m q, \mathbf{R}_n k \rangle = \text{Re}[(q \odot k^*) e^{i(m - n)\theta}]$$
+  Depends strictly on relative position $m - n$, not absolute coordinates.
+
+---
+
+## 3. Grouped-Query Attention (GQA) & Memory Calculation
+
+Queries have $H_Q$ heads; Keys and Values have $H_{KV}$ heads where $H_{KV} \ll H_Q$:
+$$\text{Query-to-KV Head Ratio: } \frac{H_Q}{H_{KV}}$$
+
+### KV-Cache Memory Formula
+For batch size $B$, sequence length $S$, layers $L$, heads $H_{KV}$, head dimension $D_h$, and 16-bit precision (2 bytes):
+$$\text{Memory}_{\text{KV}} = 2 \times L \times B \times S \times H_{KV} \times D_h \times 2 \text{ bytes}$$
+
+---
+
+## 4. Stateful KV-Cache Generation Engine
+
+```python
+class StaticKVCache:
+    def __init__(self, batch_size: int, max_seq_len: int, num_kv_heads: int, head_dim: int):
+        self.k_cache = torch.zeros(batch_size, max_seq_len, num_kv_heads, head_dim)
+        self.v_cache = torch.zeros(batch_size, max_seq_len, num_kv_heads, head_dim)
+
+    def update(self, pos: int, k_val: torch.Tensor, v_val: torch.Tensor):
+        seq_len = k_val.shape[1]
+        self.k_cache[:, pos:pos+seq_len] = k_val
+        self.v_cache[:, pos:pos+seq_len] = v_val
+        return self.k_cache[:, :pos+seq_len], self.v_cache[:, :pos+seq_len]
+```
+- **Prefill Phase**: Computes prompt tokens in parallel with causal upper-triangular mask ($O(S^2)$).
+- **Decode Phase**: Generates 1 token per step using cached history ($O(S)$ per token).

@@ -1,213 +1,105 @@
-Week 4: Essential Math Part 2 Cheatsheet
+# Month 0, Week 4 Cheatsheet: Multivariable Calculus, Convexity & Stochastic Optimization
 
-Quick reference for vectors, matrices, linear algebra, and calculus.
+---
 
-🎯 Vectors
+## 1. Gradients, Directional Derivatives & Hessians
 
-Creating & Operations
+### Gradient Vector $\nabla f(x) \in \mathbb{R}^d$
+$$\nabla f(x) = \left[ \frac{\partial f}{\partial x_1}, \frac{\partial f}{\partial x_2}, \dots, \frac{\partial f}{\partial x_d} \right]^T$$
+- **Direction of Steepest Ascent**: $u^* = \frac{\nabla f(x)}{\|\nabla f(x)\|_2}$.
+- **Directional Derivative along unit vector $u$**: $D_u f(x) = \nabla f(x)^T u$.
+
+### Hessian Matrix $H(x) = \nabla^2 f(x) \in \mathbb{R}^{d \times d}$
+$$H_{i, j}(x) = \frac{\partial^2 f(x)}{\partial x_i \partial x_j}$$
+- **Symmetric**: By Schwarz's theorem (Clairaut), $H_{i, j} = H_{j, i}$ for $C^2$ functions.
+- **Local Curvature Classification**:
+  - $H(x^*) \succ 0$ (all $\lambda_i > 0$): Strict Local Minimum.
+  - $H(x^*) \prec 0$ (all $\lambda_i < 0$): Strict Local Maximum.
+  - Indefinite ($\exists \lambda_i > 0, \lambda_j < 0$): Saddle Point.
+
+---
+
+## 2. Second-Order Taylor Polynomial & Condition Numbers
+
+### Taylor Expansion around $x_0$
+$$f(x) \approx f(x_0) + \nabla f(x_0)^T (x - x_0) + \frac{1}{2} (x - x_0)^T H(x_0) (x - x_0)$$
+
+### Condition Number $\kappa(H)$ & Pathological Curvature
+$$\kappa(H) = \frac{\lambda_{\max}(H)}{\lambda_{\min}(H)}$$
+- $\kappa \approx 1$: Isotropic spherical bowl (fast GD convergence).
+- $\kappa \gg 1$: Ill-conditioned anisotropic valley (severe GD zigzagging and oscillation).
+- Maximum stable learning rate for gradient descent: $\eta < \frac{2}{\lambda_{\max}(H)}$.
+
+---
+
+## 3. Second-Order Optimization: Newton-Raphson
+
+The pure Newton step minimizes the second-order Taylor expansion in a single step:
+$$\Delta x_{\text{Newton}} = -H(x)^{-1} \nabla f(x)$$
+- **Quadratic Local Convergence**: Error satisfies $\|x_{t+1} - x^*\| \le M \|x_t - x^*\|^2$.
+- **Computational Bottleneck**: Computing and inverting an $O(d \times d)$ Hessian costs $\mathcal{O}(d^3)$ per step, making it infeasible for deep networks with millions of parameters.
+
+---
+
+## 4. Modern Stochastic Optimization Algorithms
+
+```
+                       Stochastic Optimizer Evolution
+    SGD (Pure 1st Order) ──► Polyak Momentum (Damps Oscillation)
+                                         │
+    AdaGrad (Accumulates $g^2$)          ▼
+              │                Nesterov Accelerated (Lookahead Gradient)
+              ▼
+    RMSProp (Exponential Decay $v_t$)
+              │
+              ▼
+    Adam (Momentum + RMSProp + Bias Correction)
+              │
+              ▼
+    AdamW (Decoupled Weight Decay: Loshchilov & Hutter 2017)
+```
+
+### Mathematical Optimizer Updates Table
+
+| Optimizer | Accumulators | Parameter Update Step $\theta_{t+1}$ |
+|:---|:---|:---|
+| **SGD + Momentum** | $v_t = \beta v_{t-1} + g_t$ | $\theta_t - \eta v_t$ |
+| **Nesterov (NAG)** | $v_t = \beta v_{t-1} + \nabla f(\theta_t - \beta v_{t-1})$ | $\theta_t - \eta v_t$ |
+| **RMSProp** | $v_t = \alpha v_{t-1} + (1 - \alpha) g_t^2$ | $\theta_t - \frac{\eta}{\sqrt{v_t} + \epsilon} g_t$ |
+| **Adam** | $m_t = \beta_1 m_{t-1} + (1-\beta_1) g_t$<br>$v_t = \beta_2 v_{t-1} + (1-\beta_2) g_t^2$<br>$\hat{m}_t = \frac{m_t}{1 - \beta_1^t}, \hat{v}_t = \frac{v_t}{1 - \beta_2^t}$ | $\theta_t - \frac{\eta}{\sqrt{\hat{v}_t} + \epsilon} \hat{m}_t$ |
+| **AdamW** | Same bias-corrected $\hat{m}_t, \hat{v}_t$ as Adam | $\theta_t - \eta \lambda \theta_t - \frac{\eta}{\sqrt{\hat{v}_t} + \epsilon} \hat{m}_t$ |
+
+---
+
+## 5. Python Reference: Vectorized AdamW Optimizer
+
 ```python
 import numpy as np
 
-Create vectors
-v1 = np.array([1, 2, 3])
-v2 = np.array([4, 5, 6])
+class VectorizedAdamW:
+    def __init__(self, lr=0.001, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.01):
+        self.lr = lr
+        self.b1, self.b2 = beta1, beta2
+        self.eps = eps
+        self.wd = weight_decay
+        self.m = None
+        self.v = None
+        self.t = 0
 
-Element-wise operations
-v1 + v2          # [5, 7, 9]
-v1 - v2          # [-3, -3, -3]
-v1 * 2           # [2, 4, 6]
+    def step(self, theta: np.ndarray, grad: np.ndarray) -> np.ndarray:
+        if self.m is None:
+            self.m = np.zeros_like(theta)
+            self.v = np.zeros_like(theta)
+        self.t += 1
+        
+        self.m = self.b1 * self.m + (1.0 - self.b1) * grad
+        self.v = self.b2 * self.v + (1.0 - self.b2) * (grad ** 2)
+        
+        m_hat = self.m / (1.0 - self.b1 ** self.t)
+        v_hat = self.v / (1.0 - self.b2 ** self.t)
+        
+        # Decoupled decay + adaptive step
+        theta = theta - self.lr * self.wd * theta
+        theta = theta - (self.lr / (np.sqrt(v_hat) + self.eps)) * m_hat
+        return theta
 ```
-
-Vector Magnitude
-```python
-magnitude = np.linalg.norm(v1)  # √(1² + 2² + 3²)
-```
-
-Dot Product
-```python
-dot = np.dot(v1, v2)     # 1×4 + 2×5 + 3×6 = 32
-dot = v1 @ v2            # Same thing
-```
-
-Perpendicular Vectors
-```python
-If v1 · v2 = 0, they're perpendicular
-if np.dot(v1, v2) == 0:
-    print("Perpendicular")
-```
-
-📊 Matrices
-
-Creating & Accessing
-```python
-M = np.array([[1, 2, 3],
-              [4, 5, 6]])
-
-M.shape       # (2, 3)
-M[0, 0]       # 1 (row 0, col 0)
-M[0, :]       # [1, 2, 3] (first row)
-M[:, 0]       # [1, 4] (first column)
-```
-
-Basic Operations
-```python
-Addition
-A + B
-
-Scalar multiplication
-A * 2
-
-Matrix multiplication (important!)
-A @ B
-np.dot(A, B)
-```
-
-Matrix Properties
-```python
-Transpose
-A.T
-
-Determinant
-det = np.linalg.det(A)
-
-Inverse (if square and non-singular)
-A_inv = np.linalg.inv(A)
-
-Trace (sum of diagonal)
-trace = np.trace(A)
-```
-
-Special Matrices
-```python
-Identity matrix
-I = np.eye(3)
-
-Zeros
-Z = np.zeros((3, 3))
-
-Ones
-O = np.ones((3, 3))
-```
-
-🔄 Linear Transformations
-
-Rotation (2D)
-```python
-angle = np.pi / 4  # 45 degrees
-R = np.array([[np.cos(angle), -np.sin(angle)],
-              [np.sin(angle), np.cos(angle)]])
-
-v_rotated = R @ v
-```
-
-Scaling
-```python
-S = np.array([[2, 0],      # Scale x by 2
-              [0, 0.5]])   # Scale y by 0.5
-
-v_scaled = S @ v
-```
-
-Projection
-```python
-Project v onto u
-u = np.array([1, 0])
-v = np.array([3, 4])
-projection = (np.dot(v, u) / np.dot(u, u)) * u
-```
-
-📐 Calculus
-
-Numerical Derivative
-```python
-def derivative(f, x, h=0.0001):
-    return (f(x + h) - f(x - h)) / (2 * h)
-
-def f(x):
-    return x2
-
-derivat2 = derivative(f, 2)  # ≈ 4
-```
-
-Symbolic Derivatives (Common Rules)
-```
-f(x) = x^n      →  f'(x) = n·x^(n-1)
-f(x) = e^x      →  f'(x) = e^x
-f(x) = ln(x)    →  f'(x) = 1/x
-f(x) = sin(x)   →  f'(x) = cos(x)
-f(x) = cos(x)   →  f'(x) = -sin(x)
-```
-
-Partial Derivatives
-```python
-def f(x, y):
-    return x2 + y2
-
-∂f/∂x
-def df_dx(x, y, h=0.0001):
-    return (f(x + h, y) - f(x - h, y)) / (2 * h)
-
-∂f/∂y
-def df_dy(x, y, h=0.0001):
-    return (f(x, y + h) - f(x, y - h)) / (2 * h)
-```
-
-Gradient (Vector of Partial Derivatives)
-```python
-def gradient(f, x, y, h=0.0001):
-    gx = df_dx(f, x, y, h)
-    gy = df_dy(f, x, y, h)
-    return np.array([gx, gy])
-```
-
-🚀 Optimization
-
-Gradient Descent
-```python
-def gradientdescent(f, df, x0, learningrate=0.01, iterations=100):
-    x = x0
-    for i in range(iterations):
-        gradient = df(x)
-        x = x - learning_rate * gradient
-    return x
-
-Use it
-minx = gradientdescent(f, df, x0=0)
-```
-
-Learning Rate Impact
-```
-- Too small: Slow convergence
-- Too large: May diverge
-- Optimal: Sweet spot (usually 0.01 - 0.1)
-```
-
-Convergence Check
-```python
-if abs(x_new - x) < threshold:
-    print("Converged!")
-    break
-```
-
-🔗 Connecting to ML
-
-| Concept | ML Application |
-|---------|-----------------|
-| Vectors | Input features, embeddings |
-| Matrices | Weight matrices, image data |
-| Dot Product | Similarity, neuron activation |
-| Matrix Mult | Neural network layers |
-| Derivatives | Computing gradients |
-| Gradient Descent | Training algorithm |
-
-📦 Common Libraries
-
-```python
-import numpy as np          # Numerical computing
-from numpy.linalg import * # Linear algebra
-
-import scipy.optimize       # Optimization
-import matplotlib.pyplot as plt  # Visualization
-```
-
-[Back to Lecture](../lecturenotes/Week4Math_Part2.md)

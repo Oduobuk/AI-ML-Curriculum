@@ -1,119 +1,190 @@
-Month 4, Week 1 Assignment: Design Your First CNN
+# Week 1 Production Engineering Assignment: Modern Autoregressive Transformer Decoder (Llama-3 Architecture) from Scratch
 
- Objective
+## Executive Overview & Architectural Motivation
+Modern open-weights Large Language Models (Llama-3, Mistral, Gemma, DeepSeek) share an evolved decoder-only Transformer foundation that deviates significantly from the original 2017 Vaswani paper. They abandon learned absolute positional encodings in favor of **Rotary Position Embeddings (RoPE)**, replace Multi-Head Attention with **Grouped-Query Attention (GQA)**, replace LayerNorm with **RMSNorm**, and use gated **SwiGLU** feedforward networks.
 
-The goal of this assignment is to solidify your understanding of the fundamental building blocks of a Convolutional Neural Network. You will design a simple CNN architecture on paper for a standard image classification task without writing any code. This exercise focuses on understanding the flow of data and the change in dimensions through the network.
+In this assignment, you will architect a complete, functional **Modern Autoregressive Transformer Decoder** from scratch in pure PyTorch 2.x.
 
- Scenario
-
-You are tasked with designing a CNN to classify images from the CIFAR-10 dataset.
-
-CIFAR-10 Dataset Specifications:
-    Input Image Size: 32x32 pixels
-    Color Channels: 3 (RGB)
-    Number of Classes: 10 (e.g., airplane, car, bird, cat, deer, dog, frog, horse, ship, truck)
-
-So, the input volume to your network will be 32x32x3.
-
- Instructions
-
-Describe a simple CNN architecture layer by layer. For each layer, you must specify its parameters and calculate the dimensions of its output volume.
-
-Use the following formula for calculating the output size of a convolutional or pooling layer:
-
-`Output_Size = (Input_Size - Filter_Size + 2  Padding) / Stride + 1`
+Your model will feature exact RoPE vector rotations, GQA projection, Pre-RMSNorm residual stabilization, SwiGLU activations, and an optimized, stateful **KV-Cache generation engine** supporting greedy and top-$p$ nucleus sampling.
 
 ---
 
- Your Proposed Architecture
+## Technical Specifications & Architecture Diagram
 
-Fill out the details for each layer below.
-
- Layer 1: Convolutional Layer
-
-    Operation: Convolution + ReLU Activation
-    Parameters:
-        Number of Filters: `16`
-        Filter Size (Kernel Size): `3x3`
-        Stride: `1`
-        Padding: `1`
-    Calculation:
-        `Output_Width = (32 - 3 + 21) / 1 + 1 = ?`
-        `Output_Height = (32 - 3 + 21) / 1 + 1 = ?`
-    Output Volume Dimensions: `? x ? x 16`
-
----
-
- Layer 2: Pooling Layer
-
-    Operation: Max Pooling
-    Parameters:
-        Filter Size (Window Size): `2x2`
-        Stride: `2`
-        Padding: `0`
-    Calculation (using the output size from Layer 1 as input):
-        `Output_Width = (Input_Width - 2 + 20) / 2 + 1 = ?`
-        `Output_Height = (Input_Height - 2 + 20) / 2 + 1 = ?`
-    Output Volume Dimensions: `? x ? x 16`
-
----
-
- Layer 3: Convolutional Layer
-
-    Operation: Convolution + ReLU Activation
-    Parameters:
-        Number of Filters: `32`
-        Filter Size: `3x3`
-        Stride: `1`
-        Padding: `1`
-    Calculation (using the output size from Layer 2 as input):
-        `Output_Width = ?`
-        `Output_Height = ?`
-    Output Volume Dimensions: `? x ? x 32`
+```
+                 Input Token IDs $X \in \mathbb{N}^{B \times S}$
+                                        │
+                                        ▼
+                 ┌───────────────────────────────────────────┐
+                 │       Token Embedding Table               │
+                 └─────────────────────┬─────────────────────┘
+                                       │
+                                       ▼
+                 ┌───────────────────────────────────────────┐
+                 │       Decoder Transformer Layer           │
+                 │   - Pre-RMSNorm                           │
+                 │   - RoPE Frequency Rotation on Q and K    │
+                 │   - Grouped-Query Attention (GQA)         │
+                 │   - KV-Cache Concatenation & Masking      │
+                 │   - Residual Skip Connection              │
+                 │   - Pre-RMSNorm + SwiGLU MLP              │
+                 └─────────────────────┬─────────────────────┘
+                                       │ (Repeated L times)
+                                       ▼
+                 ┌───────────────────────────────────────────┐
+                 │       Final RMSNorm & Language Head       │
+                 └─────────────────────┬─────────────────────┘
+                                       │
+                                       ▼
+                 Autoregressive Token Probabilities / KV Cache
+```
 
 ---
 
- Layer 4: Pooling Layer
+## Detailed Deliverable Requirements
 
-    Operation: Max Pooling
-    Parameters:
-        Filter Size: `2x2`
-        Stride: `2`
-        Padding: `0`
-    Calculation (using the output size from Layer 3 as input):
-        `Output_Width = ?`
-        `Output_Height = ?`
-    Output Volume Dimensions: `? x ? x 32`
+### 1. Modern Attention & RoPE Kernels (`transformer_blocks.py`)
+Implement the following foundational modules:
+- `RMSNorm(dim, eps=1e-6)`
+- `apply_rope(x, freqs_cos, freqs_sin)`
+- `SwiGLU(dim, hidden_dim)`:
+  $$\text{SwiGLU}(x) = \left(x W_{\text{gate}} \odot \text{SiLU}(x W_{\text{gate}})\right) W_{\text{up}} \dots \implies (x W_1) \cdot \text{SiLU}(x W_3) W_2$$
+- `GroupedQueryAttention(dim, n_heads, n_kv_heads, max_seq_len)`:
+  - Supports incremental token insertion into an internal or external `KVCache`.
+  - Applies causal triangular upper-masking during the initial prefill phase.
 
----
+### 2. Full Decoder Stack (`decoder.py`)
+Implement `LlamaTransformerDecoder(nn.Module)`:
+- Configurable `vocab_size`, `dim`, `n_layers`, `n_heads`, `n_kv_heads`, `max_seq_len`.
+- Weight tying between input embedding matrix and output language model classification head (optional, configurable).
+- Returns next-token logits and updated KV-cache pointers.
 
- Layer 5: Flatten Layer
-
-    Operation: Flatten the 3D volume into a 1D vector.
-    Calculation:
-        `Vector_Length = Output_Width  Output_Height  Depth` (from Layer 4)
-        `Vector_Length = ?  ?  32 = ?`
-    Output Dimensions: `? x 1`
-
----
-
- Layer 6: Fully Connected (Dense) Layer
-
-    Operation: Dense Layer + ReLU Activation
-    Parameters:
-        Number of Neurons: `128`
-    Output Dimensions: `128 x 1`
+### 3. Autoregressive Generation & Memory Profiling (`generator.py`)
+- Implement `generate(prompt_tokens, max_new_tokens, temperature, top_p)`:
+  - Executes initial parallel prompt prefill.
+  - Switches to single-token incremental decode steps using the KV-cache.
+  - Profiles Time-To-First-Token (TTFT) and Inter-Token Latency (ITL).
 
 ---
 
- Layer 7: Output Layer
+## Starter Code Template & Submission Skeleton
 
-    Operation: Fully Connected (Dense) Layer + Softmax Activation
-    Parameters:
-        Number of Neurons: `?` (Hint: How many classes are you trying to predict?)
-    Output Dimensions: `? x 1`
+```python
+"""
+llama_transformer_decoder.py - Production Decoder-Only Transformer Suite
+"""
+import torch
+import torch.nn as nn
+import math
+from typing import Optional, Tuple
 
- Submission
+class RMSNorm(nn.Module):
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
 
-    Complete the calculations for each layer, filling in the `?` marks.
-    Save your answers in a Markdown file. There is no need to implement this in code, but be prepared to discuss your reasoning.
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        rms = torch.sqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + self.eps)
+        return (x / rms) * self.weight
+
+class SwiGLU(nn.Module):
+    def __init__(self, dim: int, hidden_dim: int):
+        super().__init__()
+        self.w1 = nn.Linear(dim, hidden_dim, bias=False)  # Gate
+        self.w2 = nn.Linear(hidden_dim, dim, bias=False)  # Down
+        self.w3 = nn.Linear(dim, hidden_dim, bias=False)  # Up
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.w2(torch.silu(self.w1(x)) * self.w3(x))
+
+class ModernDecoderLayer(nn.Module):
+    def __init__(self, dim: int, n_heads: int, n_kv_heads: int, hidden_dim: int):
+        super().__init__()
+        self.norm1 = RMSNorm(dim)
+        self.norm2 = RMSNorm(dim)
+        self.mlp = SwiGLU(dim, hidden_dim)
+        
+        self.n_heads = n_heads
+        self.n_kv_heads = n_kv_heads
+        self.head_dim = dim // n_heads
+        self.n_rep = n_heads // n_kv_heads
+        
+        self.q_proj = nn.Linear(dim, n_heads * self.head_dim, bias=False)
+        self.k_proj = nn.Linear(dim, n_kv_heads * self.head_dim, bias=False)
+        self.v_proj = nn.Linear(dim, n_kv_heads * self.head_dim, bias=False)
+        self.out_proj = nn.Linear(dim, dim, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, S, C = x.shape
+        h = self.norm1(x)
+        
+        # Projections
+        q = self.q_proj(h).view(B, S, self.n_heads, self.head_dim).transpose(1, 2)
+        k = self.k_proj(h).view(B, S, self.n_kv_heads, self.head_dim).transpose(1, 2)
+        v = self.v_proj(h).view(B, S, self.n_kv_heads, self.head_dim).transpose(1, 2)
+        
+        # Expand KV heads for GQA
+        if self.n_rep > 1:
+            k = k.repeat_interleave(self.n_rep, dim=1)
+            v = v.repeat_interleave(self.n_rep, dim=1)
+            
+        # Scaled dot-product attention
+        scale = 1.0 / math.sqrt(self.head_dim)
+        scores = torch.matmul(q, k.transpose(-2, -1)) * scale
+        
+        # Causal Mask
+        mask = torch.triu(torch.full((S, S), float("-inf"), device=x.device), diagonal=1)
+        scores = scores + mask
+        
+        attn = torch.softmax(scores, dim=-1)
+        context = torch.matmul(attn, v).transpose(1, 2).reshape(B, S, C)
+        
+        # Residuals
+        x = x + self.out_proj(context)
+        x = x + self.mlp(self.norm2(x))
+        return x
+
+class LlamaMiniDecoder(nn.Module):
+    def __init__(self, vocab_size: int = 1000, dim: int = 128, n_layers: int = 4, 
+                 n_heads: int = 8, n_kv_heads: int = 2, hidden_dim: int = 256):
+        super().__init__()
+        self.tok_embeddings = nn.Embedding(vocab_size, dim)
+        self.layers = nn.ModuleList([
+            ModernDecoderLayer(dim, n_heads, n_kv_heads, hidden_dim) for _ in range(n_layers)
+        ])
+        self.norm = RMSNorm(dim)
+        self.output = nn.Linear(dim, vocab_size, bias=False)
+
+    def forward(self, tokens: torch.Tensor) -> torch.Tensor:
+        x = self.tok_embeddings(tokens)
+        for layer in self.layers:
+            x = layer(x)
+        x = self.norm(x)
+        return self.output(x)
+
+# Verification Run
+if __name__ == "__main__":
+    torch.manual_seed(42)
+    B, Seq = 2, 16
+    tokens = torch.randint(0, 1000, (B, Seq))
+    
+    model = LlamaMiniDecoder(vocab_size=1000, dim=128, n_layers=2, n_heads=4, n_kv_heads=2)
+    logits = model(tokens)
+    
+    print(f"Decoder Forward Pass Logits: {logits.shape} (Expected: [{B}, {Seq}, 1000])")
+    assert logits.shape == (B, Seq, 1000)
+    assert not torch.isnan(logits).any()
+```
+
+---
+
+## Grading Rubric (100 Points Total)
+
+| Component | Points | Criteria |
+| :--- | :--- | :--- |
+| **RoPE Mathematical Implementation** | 25 | Correct complex 2D planar rotation, frequency precomputation, and norm preservation. |
+| **Grouped-Query Attention (GQA)** | 25 | Proper expansion of shared KV heads and correct tensor dimensionality checks. |
+| **RMSNorm & SwiGLU Modules** | 20 | Clean forward operations with scale invariance and non-linear gating mechanics. |
+| **Causal Masking & KV Caching** | 20 | Strict causal autoregressive isolation; stateful cache decoding verification. |
+| **Verification & Latency Benchmarks** | 10 | Complete runnable execution script measuring TTFT and generation throughput. |

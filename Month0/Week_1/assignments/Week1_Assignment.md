@@ -1,195 +1,188 @@
-Week 1: Assignment - Python Fundamentals Project
-
-📋 Overview
-
-In this assignment, you'll build a Personal Information System that collects user data, performs calculations, and displays a formatted report.
-
-Skills Tested:
-- Variables and data types
-- User input/output
-- Arithmetic operations
-- String operations and formatting
-- Type conversion
-
-🎯 Project Requirements
-
-Create a Python program called `personalinfosystem.py` that does the following:
-
-Part 1: Data Collection (30%)
-Collect the following information from the user:
-1. Full name (string)
-2. Age (integer)
-3. Height in inches (float)
-4. Weight in pounds (float)
-5. Favorite hobby (string)
-
-Part 2: Calculations (40%)
-Calculate the following:
-1. Years until retirement: Assume retirement age is 65
-2. BMI (Body Mass Index): BMI = (weight / (height²)) × 703
-3. Age in 10 years
-4. Year born (approximate, using 2024)
-
-Part 3: Formatted Output (30%)
-Display a nicely formatted report that includes:
-- A decorative header
-- All original user information
-- All calculated values
-- A closing statement
-- Proper spacing and alignment
-
-📝 Example Output
+# Month 0, Week 1: High-Performance Python Internals & Systems Engineering — Assignment
 
 ```
-╔═══════════════════════════════════════════════════════════════╗
-║              PERSONAL INFORMATION SYSTEM REPORT               ║
-╚═══════════════════════════════════════════════════════════════╝
-
---- PERSONAL INFORMATION ---
-Name:                          John Doe
-Age:                           30 years old
-Height:                        70 inches
-Weight:                        180 pounds
-Favorite Hobby:                Playing Guitar
-
---- STATISTICS & PROJECTIONS ---
-Approximate Birth Year:        1994
-Age in 10 Years:               40 years old
-Years Until Retirement (65):   35 years
-
---- HEALTH METRICS ---
-BMI:                           25.81
-BMI Category:                  Overweight (25 or higher)
-
---- END REPORT ---
-Thank you for using the Personal Information System!
+================================================================================
+COURSE:    AI & LLM SYSTEMS ENGINEERING (2026 EDITION)
+MODULE:    MONTH 0: ADVANCED PYTHON & APPLIED MATHEMATICS FOR AI
+WEEK:      WEEK 1: HIGH-PERFORMANCE PYTHON INTERNALS & UV TOOLING
+PROJECT:   ENTERPRISE IN-MEMORY TELEMETRY BUFFER & CACHE PROFILER
+DELIVERABLE: PRODUCTION PYTHON PACKAGE, BENCHMARK REPORT & TEST SUITE
+TARGET:    SENIOR AI ENGINEERS & SYSTEMS ARCHITECTS
+================================================================================
 ```
 
-🚀 Step-by-Step Guide
+---
 
-Step 1: Get User Input
-```python
-Ask for and store each piece of information
-name = input("Enter your full name: ")
-... continue for other fields
+## 1. Project Overview & Architectural Mission
+
+In modern AI and LLM inference engines (such as vLLM, TensorRT-LLM, or distributed data loaders), naive Python object allocations create severe performance degradation. High-frequency object allocations trigger frequent Python garbage collection stop-the-world pauses, fragment heap memory, and choke CPU cache lines.
+
+For this assignment, you will architect an **Enterprise In-Memory Telemetry Buffer & Object Pooler** (`telemetry_buffer`). This system must safely ingest, store, window, and serialize millions of streaming high-frequency AI inference telemetry events while enforcing:
+1. **Zero-Copy Memory Utilization**: Leveraging `memoryview`, byte buffers, and `__slots__` to achieve $\ge 60\%$ memory reduction over standard dictionary representations.
+2. **Deterministic Memory Pooling**: Eliminating `PyObject_Malloc` overhead by recycling fixed-size telemetry payload structures.
+3. **CPython Reference Safety**: Demonstrating zero circular reference leaks and validating complete garbage collection cleanup.
+4. **Professional Modern Tooling**: Managed exclusively with **uv**, formatted with **ruff**, type-checked with **mypy (strict mode)**, and verified via **pytest** with $\ge 85\%$ coverage.
+
+---
+
+## 2. Technical Specification & Architecture
+
+```
++---------------------------------------------------------------------------------------------------+
+|                        TELEMETRY BUFFER ARCHITECTURAL WORKFLOW                                    |
++---------------------------------------------------------------------------------------------------+
+|  High-Frequency Stream: (Inference Events: model_id, prompt_tokens, latency_ms, status)           |
+|       |                                                                                           |
+|       v                                                                                           |
+|  [Object Pooler: TelemetryPayloadPool]                                                            |
+|       - Pre-allocates N reusable __slots__ instances                                              |
+|       - Eliminates runtime dynamic heap allocations                                               |
+|       |                                                                                           |
+|       v                                                                                           |
+|  [Circular Ring Buffer: ZeroCopyRingBuffer]                                                       |
+|       - Fixed-capacity circular array avoiding list reallocation resizing                         |
+|       - O(1) insertion, O(1) FIFO eviction, O(1) sliding window slicing                           |
+|       |                                                                                           |
+|       v                                                                                           |
+|  [Memory Profiler & Verification Suite]                                                           |
+|       - tracemalloc peak memory verification vs dict baselines                                    |
+|       - Pytest automated verification suite (>=85% test coverage)                                 |
++---------------------------------------------------------------------------------------------------+
 ```
 
-Step 2: Perform Calculations
-```python
-Calculate years until retirement
-yearstoretirement = 65 - age
-... continue for other calculations
+### Module Structure
+Your submission must follow this exact repository structure:
+```
+telemetry_buffer/
+├── pyproject.toml               # uv package configuration with ruff, mypy, pytest
+├── README.md                    # Benchmark report and architectural rationale
+├── src/
+│   └── telemetry/
+│       ├── __init__.py
+│       ├── payload.py           # Slots-based memory-optimized telemetry records
+│       ├── pool.py              # Thread-safe object recycler pool
+│       ├── buffer.py            # Circular ring buffer with sliding-window iterators
+│       └── profiler.py          # tracemalloc comparison harness
+└── tests/
+    ├── __init__.py
+    ├── test_payload.py          # Memory footprint and slots verification
+    ├── test_pool.py             # Acquisition, recycling, and capacity bounds
+    └── test_buffer.py           # O(1) insertion, eviction, and zero-copy slicing
 ```
 
-Step 3: Create the Report
-```python
-Print formatted output
-print("╔═══════════════════════════════════════════╗")
-print("║      PERSONAL INFORMATION SYSTEM         ║")
-print("╚═══════════════════════════════════════════╝")
-... continue with formatted output
-```
+---
 
-💡 Implementation Tips
+## 3. Implementation Requirements
 
-Formatting Tips
-- Use f-strings for variable insertion: `print(f"Name: {name}")`
-- Use `:>30` for right alignment: `f"{'Age:':<30} {age}"`
-- Use escape characters: `\n` for newline, `\t` for tab
+### Requirement 1: Memory-Optimized Telemetry Payload (`src/telemetry/payload.py`)
+- Implement a class `TelemetryRecord`:
+  - Attributes: `event_id` (str), `timestamp` (float), `prompt_tokens` (int), `completion_tokens` (int), `latency_ms` (float), `status_code` (int).
+  - Must define `__slots__ = (...)` to eliminate the default per-instance `__dict__` overhead.
+  - Implement a method `to_bytes() -> bytes` using Python `struct.pack()` to serialize records into a compact binary format.
+  - Implement a `classmethod` `from_bytes(data: bytes) -> TelemetryRecord` using `struct.unpack()`.
 
-Calculation Tips
-```python
-BMI calculation
-bmi = (weight / (height  2)) * 703
+### Requirement 2: Deterministic Object Pooler (`src/telemetry/pool.py`)
+- Implement a class `TelemetryPayloadPool`:
+  - `__init__(self, capacity: int = 10_000)`: Pre-allocates instances into an internal deque.
+  - `acquire(self, **kwargs) -> TelemetryRecord`: Retrieves an idle record, populates its attributes, and returns it. If the pool is empty, dynamically instantiates a new record.
+  - `release(self, record: TelemetryRecord) -> None`: Resets the record's attributes to defaults and returns it to the free pool.
+  - Must be thread-safe using `threading.Lock`.
 
-Years to retirement
-yearstoretirement = 65 - age
+### Requirement 3: High-Performance Circular Ring Buffer (`src/telemetry/buffer.py`)
+- Implement a class `ZeroCopyRingBuffer`:
+  - `__init__(self, max_capacity: int = 100_000)`: Pre-allocates a fixed-size list `[None] * max_capacity` to prevent dynamic memory resizing.
+  - `append(self, record: TelemetryRecord) -> None`: Inserts the record in $O(1)$ time. If the buffer is full, overwrites the oldest element (circular FIFO).
+  - `get_window(self, size: int) -> list[TelemetryRecord]`: Returns the most recent `size` records without copying the entire buffer array.
+  - Implement the `__iter__` protocol to yield records in chronological order from oldest to newest.
 
-Birth year (approximate)
-birth_year = 2024 - age
-```
+### Requirement 4: Benchmarking & Memory Profiling (`src/telemetry/profiler.py`)
+- Write an automated benchmark comparing:
+  - **Baseline**: 100,000 standard Python dictionaries stored in a naive list.
+  - **Optimized**: 100,000 `TelemetryRecord` instances managed via `ZeroCopyRingBuffer`.
+- Output must record:
+  - Peak RAM footprint in Megabytes (using `tracemalloc`).
+  - Total allocation time in milliseconds.
+  - Serialization speed comparison (JSON serialization vs. binary `struct.pack`).
 
-Debugging Tips
-- Test one section at a time
-- Print intermediate values to verify calculations
-- Check for type errors (string vs number)
+---
 
-✅ Checklist Before Submission
+## 4. Verification & Grading Rubric
 
-- [ ] Program runs without errors
-- [ ] Collects all 5 pieces of user information
-- [ ] Calculates all 4 required values correctly
-- [ ] Output is nicely formatted and readable
-- [ ] Used f-strings for formatting
-- [ ] Code has comments explaining sections
-- [ ] Variable names are clear and descriptive
-- [ ] File is named `personalinfosystem.py`
+Your assignment will be evaluated across 5 strict engineering dimensions:
 
-🔧 Enhancement Ideas (Optional)
+| Dimension | Weight | Acceptance Threshold |
+| :--- | :---: | :--- |
+| **1. Memory Optimization** | 25% | `TelemetryRecord` utilizes `__slots__`; achieves $\ge 60\%$ RAM reduction over standard dictionaries in `tracemalloc` profiling. |
+| **2. Algorithmic Rigor** | 25% | Ring buffer executes insertions and evictions in strictly $O(1)$ time; object pool recycles instances without memory leaks. |
+| **3. Type Safety & Linting** | 20% | `mypy --strict` passes with 0 errors; code formatted with `ruff` conforming to PEP 8 standards. |
+| **4. Test Suite Coverage** | 20% | Comprehensive `pytest` test suite achieving $\ge 85\%$ branch and statement coverage. |
+| **5. Technical Report** | 10% | `README.md` includes empirical benchmark tables, CPython memory analysis, and architectural trade-off discussion. |
 
-If you finish early, try adding:
-1. Additional calculations: Age in months, days
-2. BMI category: Display "Underweight", "Normal", "Overweight", etc.
-3. Multiple profiles: Loop to let user enter info for multiple people
-4. Data validation: Check that age is reasonable, height is positive, etc.
+---
 
-📤 Submission
-
-1. Save your file as: `personalinfosystem.py`
-2. Create a folder: `Week1_Assignment`
-3. Move your file into it
-4. Test your program one more time with sample input
-5. Document your work and submit
-
-🎓 Learning Outcomes
-
-By completing this assignment, you'll have practiced:
-- ✅ Collecting user input
-- ✅ Type conversion (string to int/float)
-- ✅ Arithmetic operations
-- ✅ String formatting and display
-- ✅ Writing programs with multiple steps
-- ✅ Organizing code logically
-
-📞 If You Get Stuck
-
-Common Issues:
-
-| Problem | Solution |
-|---------|----------|
-| "ValueError: could not convert string to float" | Use `float()` instead of `int()` for decimals |
-| Output looks messy/unaligned | Use f-string alignment: `f"{name:<30}"` |
-| BMI calculation seems wrong | Remember: height² means height  height, not just height  2 |
-| Name has spaces and doesn't work | `input()` works fine with spaces; that's not the issue |
-
-Where to Get Help:
-- Review the lecture notes
-- Check similar examples in exercises
-- Google the error message
-- Ask in the course forum
-
-🌟 Sample Solution Structure
+## 5. Starter Code Template
 
 ```python
-Personal Information System
+# src/telemetry/payload.py
+import struct
+from typing import ClassVar
 
-Step 1: Collect user information
-name = input("Enter your full name: ")
-age = int(input("Enter your age: "))
-... continue
+class TelemetryRecord:
+    __slots__ = (
+        "event_id",
+        "timestamp",
+        "prompt_tokens",
+        "completion_tokens",
+        "latency_ms",
+        "status_code"
+    )
 
-Step 2: Perform calculations
-yearstoretirement = 65 - age
-bmi = (weight / (height  2)) * 703
-... continue
+    # Struct format: 16s (UUID), d (double ts), i (int prompt), i (int comp), f (float latency), h (short status)
+    STRUCT_FORMAT: ClassVar[str] = "!16sdiifh"
 
-Step 3: Display formatted report
-print("╔═══════════════════════════════════════════╗")
-print("║      PERSONAL INFORMATION SYSTEM         ║")
-print("╚═══════════════════════════════════════════╝")
-... continue
+    def __init__(
+        self,
+        event_id: str = "",
+        timestamp: float = 0.0,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        latency_ms: float = 0.0,
+        status_code: int = 200
+    ) -> None:
+        self.event_id = event_id
+        self.timestamp = timestamp
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.latency_ms = latency_ms
+        self.status_code = status_code
+
+    def to_bytes(self) -> bytes:
+        return struct.pack(
+            self.STRUCT_FORMAT,
+            self.event_id.encode("utf-8")[:16].ljust(16, b"\x00"),
+            self.timestamp,
+            self.prompt_tokens,
+            self.completion_tokens,
+            self.latency_ms,
+            self.status_code
+        )
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> TelemetryRecord:
+        eid_bytes, ts, p_tok, c_tok, lat, status = struct.unpack(cls.STRUCT_FORMAT, data)
+        return cls(
+            event_id=eid_bytes.decode("utf-8").rstrip("\x00"),
+            timestamp=ts,
+            prompt_tokens=p_tok,
+            completion_tokens=c_tok,
+            latency_ms=lat,
+            status_code=status
+        )
 ```
 
-Good luck! Remember: the goal is to practice, not to be perfect. Every line of code you write builds your skills. 💪
+---
 
-After Submission: Move on to [Week 2: Control Flow & Functions](../../Week2/lecturenotes/)
+## 6. Submission Guidelines
+1. Push your solution to your assigned repository branch: `submission/month0-week1`.
+2. Include the output of `pytest --cov=src` in your PR description.
+3. Attach the benchmark results table generated by `python -m telemetry.profiler`.

@@ -1,47 +1,105 @@
-Month 5, Week 4: Generative Models Cheatsheet
+# Month 5, Week 4 Cheatsheet: Production FastAPI Gateways, SSE Token Streaming & Hardened Containers
 
- Generative vs. Discriminative Models
+---
 
-| Feature | Generative Models | Discriminative Models |
-| :--- | :--- | :--- |
-| Goal | Learn the distribution of data (P(X)) or joint distribution (P(X,Y)) to generate new samples. | Learn to distinguish between different classes (P(Y|X)) or predict an output. |
-| Examples | AEs, VAEs, GANs, Diffusion Models | Logistic Regression, SVM, Decision Trees, most CNNs for classification. |
+## 1. Asynchronous FastAPI Gateway: Non-Blocking Architecture
 
- Autoencoders (AEs)
+```
+                  FastAPI Asynchronous Request Flow
+                 ┌───────────────────────────────────────┐
+                 │       Incoming HTTP/2 Client Pool     │
+                 └───────────────────┬───────────────────┘
+                                     │
+                                     ▼
+                 ┌───────────────────────────────────────┐
+                 │    FastAPI Event Loop (Single Thread) │
+                 └───────────┬───────────────────────┬───┘
+                             │                       │
+           IO-Bound Tasks (async def)    CPU-Bound Inference
+                             │                       │
+                             ▼                       ▼
+                     [Async DB / Redis]     asyncio.to_thread()
+                                                     │
+                                                     ▼
+                                            [Worker Thread Pool]
+```
 
-    Purpose: Learn an efficient, compressed representation (latent space) of input data for reconstruction.
-    Architecture:
-        Encoder: Maps input `x` to latent representation `z` (`z = f(x)`).
-        Decoder: Maps latent representation `z` back to reconstructed input `x'` (`x' = g(z)`).
-    Loss Function: Primarily Reconstruction Loss (e.g., Mean Squared Error for continuous data, Binary Cross-Entropy for binary data).
-        `L_AE = ||x - x'||^2` (MSE) or `L_AE = BCE(x, x')`
-    Applications: Dimensionality reduction, denoising, anomaly detection, feature learning.
+### Event Loop Starvation Rule
+Never execute synchronous CPU-bound model inference directly inside an `async def` route. Use:
+```python
+result = await asyncio.to_thread(model_inference_sync, payload)
+```
 
- Variational Autoencoders (VAEs)
+---
 
-    Purpose: Learn a probabilistic mapping from input to latent space, allowing for continuous and smooth generation.
-    Architecture: Similar encoder-decoder, but the encoder outputs parameters (mean `μ` and variance `σ`) of a probability distribution (typically Gaussian) in the latent space.
-    Reparameterization Trick: Allows backpropagation through the sampling process by sampling `z = μ + σ  ε`, where `ε ~ N(0, 1)`.
-    Loss Function: Combines Reconstruction Loss and KL Divergence Loss.
-        `L_VAE = Reconstruction_Loss(x, x') + KL_Divergence(N(μ, σ^2) || N(0, 1))`
-        KL Divergence term encourages the latent distribution to be close to a standard normal distribution, ensuring a well-structured latent space.
-    Applications: Image generation, data imputation, semi-supervised learning.
+## 2. Server-Sent Events (SSE) Streaming Protocol
 
- Generative Adversarial Networks (GANs)
+Implements the standard W3C SSE event-stream protocol with immediate chunk flushing:
+```python
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+import asyncio
+import json
 
-    Purpose: Generate realistic data samples that are indistinguishable from real data.
-    Architecture: Two competing neural networks:
-        Generator (G): Takes random noise `z` as input and generates synthetic data `G(z)`.
-        Discriminator (D): Takes either real data `x` or generated data `G(z)` and tries to distinguish between them.
-    Training Process (Minimax Game):
-        Discriminator's Goal: Maximize `log(D(x)) + log(1 - D(G(z)))` (correctly classify real as real, fake as fake).
-        Generator's Goal: Minimize `log(1 - D(G(z)))` (fool the discriminator into classifying fake as real).
-    Loss Function:
-        `min_G max_D V(D, G) = E_{x~p_{data}(x)}[log D(x)] + E_{z~p_z(z)}[log(1 - D(G(z)))]`
-    Challenges: Mode collapse, training instability, difficulty in evaluating generated samples.
-    Applications: Realistic image generation (e.g., faces, landscapes), style transfer, super-resolution, data augmentation.
+app = FastAPI()
 
- Other Generative Models
+async def event_generator(prompt: str):
+    tokens = ["Production", " AI", " gateway", " operational."]
+    for tok in tokens:
+        await asyncio.sleep(0.01)
+        payload = {"choices": [{"delta": {"content": tok}}]}
+        yield f"data: {json.dumps(payload)}\n\n"
+        
+    yield "data: [DONE]\n\n"
 
-    Diffusion Models (DMs): A class of generative models that learn to reverse a gradual diffusion process (adding noise) to generate data. Known for high-quality image generation.
-    Normalizing Flows: Models that learn a sequence of invertible transformations to map a simple distribution (e.g., Gaussian) to a complex data distribution.
+@app.post("/v1/chat/completions")
+async def stream_chat(req: ChatRequest):
+    return StreamingResponse(
+        event_generator(req.prompt), 
+        media_type="text/event-stream"
+    )
+```
+
+---
+
+## 3. Pydantic v2 Production Validation
+
+```python
+from pydantic import BaseModel, Field
+
+class ChatCompletionRequest(BaseModel):
+    model: str = Field(..., description="Target model identifier")
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    max_tokens: int = Field(default=256, gt=0, le=4096)
+    stream: bool = False
+```
+
+---
+
+## 4. Hardened Multi-Stage Dockerfile Blueprint
+
+```dockerfile
+# 1. Builder Stage
+FROM python:3.11-slim AS builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# 2. Hardened Runtime Stage
+FROM python:3.11-slim AS runtime
+WORKDIR /app
+ENV PATH="/install/bin:$PATH" \
+    PYTHONPATH="/install/lib/python3.11/site-packages:$PYTHONPATH" \
+    PYTHONUNBUFFERED=1
+
+# Non-root user for security compliance
+RUN groupadd -g 10001 appgroup && useradd -u 10001 -g appgroup -s /bin/false appuser
+COPY --from=builder /install /install
+COPY --chown=appuser:appgroup ./app /app/app
+USER appuser
+
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')" || exit 1
+ENTRYPOINT ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+```

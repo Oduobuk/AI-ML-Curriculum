@@ -1,96 +1,163 @@
- Month 3, Week 4: Coding Assignment - Extending the Neural Network
+# Week 4 Production Engineering Assignment: Real-Time Edge Vision Pipeline & YOLO Detection Engine
 
- Objective
+## Executive Overview & Architectural Motivation
+Real-time computer vision in autonomous driving, industrial robotics, and edge camera analytics requires detecting multi-scale objects within stringent real-time budgets ($< 30\text{ ms}$ latency). Achieving this performance demands anchor-free feature pyramid heads, Complete IoU (CIoU) loss optimization, vectorized Non-Maximum Suppression (NMS), and INT8 deployment engines.
 
-In this assignment, you will take the `BackPropagationNetwork` class from the lecture and code examples and extend its functionality. This will solidify your understanding of how different components of a neural network work together.
+In this assignment, you will engineer a **Production-Grade Real-Time Object Detection Pipeline** inspired by YOLOv8/v11.
 
-You will be working with the `neural_network_from_scratch.py` file provided in the `02_Code_Examples` folder. Make a copy of this file to work on for your assignment.
+You will construct an anchor-free detection head that emits bounding box regression offsets and class logits across multi-scale feature strides ($8, 16, 32$), implement Complete IoU (CIoU) loss and Distribution Focal Loss (DFL), vectorize Greedy NMS, and benchmark post-training INT8 quantization.
 
+---
 
+## Technical Specifications & Architecture Diagram
 
- Task 1: Implement the `train` Method (Core Task)
+```
+                 Multi-Scale Feature Pyramid [P3 (stride 8), P4 (stride 16), P5 (stride 32)]
+                                            │
+                                            ▼
+                 ┌───────────────────────────────────────────────────────┐
+                 │         Anchor-Free Decoupled Detection Head          │
+                 │   - Classification Branch: [B, C, H_i, W_i] (BCE Loss)│
+                 │   - Box Regression Branch: [B, 4, H_i, W_i] (CIoU/DFL)│
+                 └──────────────────────────┬────────────────────────────┘
+                                            │
+                                            ▼
+                 ┌───────────────────────────────────────────────────────┐
+                 │             Target Assigner & Losses                  │
+                 │   - Task-Aligned Assigner (TAL): $t = s^\alpha \times \text{IoU}^\beta$ │
+                 │   - Complete IoU Loss ($\mathcal{L}_{\text{CIoU}}$)    │
+                 └──────────────────────────┬────────────────────────────┘
+                                            │
+                                            ▼
+                 ┌───────────────────────────────────────────────────────┐
+                 │         Vectorized Non-Maximum Suppression (NMS)      │
+                 │   - Confidence Score Filter (> 0.25)                  │
+                 │   - Pairwise IoU Masking & Duplicate Pruning          │
+                 └──────────────────────────┬────────────────────────────┘
+                                            │
+                                            ▼
+                 Real-Time Bounding Box Detections at 60+ FPS
+```
 
-The provided code in the lecture notes only has a `run` method (forward propagation). Your first and most important task is to implement the `train` method. This will involve coding the backpropagation algorithm.
+---
 
-Steps:
+## Detailed Deliverable Requirements
 
-1.  Define the `train` method signature:
-    It should accept `self`, `input_data`, `labels`, `learning_rate`, and `epochs`.
+### 1. Anchor-Free Multi-Stride Detection Head (`head.py`)
+Implement `AnchorFreeDetectionHead(nn.Module)`:
+- Accepts multi-scale feature maps from strides 8, 16, and 32.
+- Decouples classification and bounding box regression into separate parallel convolutional branches.
+- Decodes box coordinates from grid cell centers:
+  $$\hat{x}_1 = (c_x - l) \times s, \quad \hat{y}_1 = (c_y - t) \times s, \quad \hat{x}_2 = (c_x + r) \times s, \quad \hat{y}_2 = (c_y + b) \times s$$
+  where $(l, t, r, b)$ are predicted distance offsets to the box edges.
 
-2.  Create the training loop:
-    The method should loop for the specified number of `epochs`.
+### 2. Complete IoU (CIoU) Regression Loss Engine (`losses.py`)
+- Implement `CIoULoss`:
+  - Penalizes overlapping area, central point distance, and aspect ratio discrepancies.
+  - Returns scalar mean loss over positive matches.
 
-3.  Perform a Forward Pass:
-    Inside the loop, the first step is to call `self.run(input_data)` to execute a forward pass. This will compute the network's predictions and, crucially, cache the inputs and outputs of each layer (`self._layer_input` and `self._layer_output`), which you'll need for the backward pass.
+### 3. Vectorized NMS & INT8 Benchmarking Suite (`engine.py`)
+- Implement `vectorized_nms(boxes, scores, iou_threshold=0.5, conf_threshold=0.25)`:
+  - Vectorized pairwise IoU computation.
+  - Zero Python list-loop overhead on candidate box pruning.
+- Quantize the convolutional head using PyTorch Dynamic/Static INT8 quantization and compare latency and FLOPs.
 
-4.  Implement the Backward Pass (Backpropagation):
-    This is the most complex part. You need to calculate the error "delta" for each layer, starting from the output and moving backward.
+---
 
-       Delta for the Output Layer: The error at the output layer is the difference between the network's predictions and the true labels.
-        `delta_output = network_output - true_labels`
+## Starter Code Template & Submission Skeleton
 
-       Delta for Hidden Layers: To calculate the delta for a hidden layer, you need to "propagate" the error from the layer in front of it. The formula is:
-        `delta_hidden = (weights_from_hidden_to_next_layer.T @ delta_next_layer)  derivative_of_hidden_activation`
+```python
+"""
+realtime_yolo_detector.py - Production Real-Time Vision Suite
+"""
+import torch
+import torch.nn as nn
+import math
+from typing import List, Tuple
 
-           You will need to loop backward from the last hidden layer to the first.
-           Remember to exclude the bias weight during error propagation.
-           The `derivative_of_hidden_activation` is the derivative of the activation function (e.g., sigmoid or ReLU) applied to the output of that hidden layer.
+class DecoupledDetectionHead(nn.Module):
+    def __init__(self, in_channels: int, num_classes: int = 4):
+        super().__init__()
+        self.cls_branch = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(in_channels),
+            nn.SiLU(),
+            nn.Conv2d(in_channels, num_classes, kernel_size=1)
+        )
+        self.reg_branch = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(in_channels),
+            nn.SiLU(),
+            nn.Conv2d(in_channels, 4, kernel_size=1)
+        )
 
-5.  Update the Weights:
-    After calculating the deltas for all layers, you can now calculate the gradient for each weight matrix and update the weights.
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        cls_logits = self.cls_branch(x)  # [B x Num_Classes x H x W]
+        reg_dist = torch.relu(self.reg_branch(x))  # [B x 4 x H x W]
+        return cls_logits, reg_dist
 
-       The gradient for a layer's weights is the dot product of that layer's delta and its input, averaged over all samples:
-        `gradient = delta_layer @ input_to_layer.T / number_of_samples`
+def vectorized_nms(boxes: torch.Tensor, scores: torch.Tensor, iou_thresh: float = 0.5) -> torch.Tensor:
+    order = scores.argsort(descending=True)
+    keep = []
+    
+    while order.numel() > 0:
+        i = order[0].item()
+        keep.append(i)
+        if order.numel() == 1:
+            break
+            
+        cur = boxes[i].unsqueeze(0)
+        rem = boxes[order[1:]]
+        
+        # Pairwise IoU
+        area_cur = (cur[:, 2] - cur[:, 0]) * (cur[:, 3] - cur[:, 1])
+        area_rem = (rem[:, 2] - rem[:, 0]) * (rem[:, 3] - rem[:, 1])
+        
+        lt = torch.max(cur[:, None, :2], rem[:, :2])
+        rb = torch.min(cur[:, None, 2:], rem[:, 2:])
+        wh = (rb - lt).clamp(min=0)
+        inter = wh[:, :, 0] * wh[:, :, 1]
+        union = area_cur[:, None] + area_rem - inter
+        iou = (inter / union.clamp(min=1e-6)).squeeze(0)
+        
+        order = order[1:][iou <= iou_thresh]
+        
+    return torch.tensor(keep, dtype=torch.long)
 
-       Update the weights using the gradient descent rule:
-        `self.weights[i] -= learning_rate  gradient`
+# Verification Run
+if __name__ == "__main__":
+    torch.manual_seed(42)
+    B, C, H, W = 2, 64, 20, 20
+    head = DecoupledDetectionHead(in_channels=C, num_classes=3)
+    feat = torch.randn(B, C, H, W)
+    
+    cls_logits, reg_dist = head(feat)
+    print(f"Classification Logits Shape: {cls_logits.shape} (Expected: [{B}, 3, 20, 20])")
+    print(f"Regression Distance Shape:   {reg_dist.shape} (Expected: [{B}, 4, 20, 20])")
+    
+    assert cls_logits.shape == (B, 3, H, W)
+    assert reg_dist.shape == (B, 4, H, W)
+    
+    # Test NMS
+    dummy_boxes = torch.tensor([
+        [10.0, 10.0, 50.0, 50.0],
+        [12.0, 11.0, 48.0, 52.0],
+        [100.0, 100.0, 150.0, 150.0]
+    ])
+    dummy_scores = torch.tensor([0.9, 0.7, 0.85])
+    kept = vectorized_nms(dummy_boxes, dummy_scores, iou_thresh=0.4)
+    print(f"Kept indices after NMS: {kept.tolist()}")
+    assert kept.tolist() == [0, 2]
+```
 
-6.  Add Progress Indicators:
-    Inside your training loop, print the loss and accuracy every 100 epochs so you can see if your network is learning.
+---
 
+## Grading Rubric (100 Points Total)
 
-
- Task 2: Add a New Activation Function
-
-The `sigmoid` function is classic but can lead to issues like vanishing gradients. A more modern and common choice for hidden layers is the Rectified Linear Unit (ReLU).
-
-Steps:
-
-1.  Implement the `relu` function:
-    Create a new function `relu(x, derivative=False)`.
-       The function itself is `np.maximum(0, x)`.
-       Its derivative is `1` for `x > 0` and `0` otherwise. A simple way to implement this is `np.where(x > 0, 1, 0)`.
-
-2.  Modify the `__init__` method:
-    Allow the `BackPropagationNetwork` class to accept a list of activation functions for its hidden layers. If none are provided, it should default to using `sigmoid`.
-
-3.  Modify the `run` and `train` methods:
-    Update the forward and backward passes to use the specified activation function (and its derivative) for each hidden layer. The output layer should still use `softmax` (or `sigmoid` for binary classification).
-
-
-
- Task 3: (Optional Challenge) Implement Cross-Entropy Loss
-
-Our basic implementation uses Mean Squared Error (MSE) as the implicit loss function, which leads to the simple `(prediction - label)` error delta for the output layer when using a linear output. For classification tasks, Categorical Cross-Entropy is a much more effective loss function, especially when paired with a `softmax` output layer.
-
-Steps:
-
-1.  Implement the `softmax` function:
-    This function takes the raw outputs (logits) of the final layer and converts them into probabilities that sum to 1.
-    `softmax(x) = np.exp(x) / np.sum(np.exp(x))`
-    Hint: For numerical stability, subtract the max value from `x` before exponentiating: `np.exp(x - np.max(x))`.
-
-2.  Modify the `run` method:
-    Ensure the final layer of your network uses the `softmax` function.
-
-3.  Simplify the Output Delta:
-    The beauty of using softmax with cross-entropy is that the error delta for the output layer remains incredibly simple:
-    `delta_output = network_output_after_softmax - true_labels`
-    You don't need to calculate the derivative of softmax separately; it elegantly simplifies to this form.
-
-4.  Calculate and Print the Loss:
-    Inside your training loop, calculate the categorical cross-entropy loss to monitor progress:
-    `loss = -np.sum(true_labels  np.log(predictions + 1e-9)) / number_of_samples`
-    (The `1e-9` is added to prevent `log(0)` errors).
-
-Good luck!
+| Component | Points | Criteria |
+| :--- | :--- | :--- |
+| **Decoupled Detection Head** | 30 | Correct convolutional channels, grid-cell center offset mapping, activation functions. |
+| **Complete IoU (CIoU) Loss Formulation** | 30 | Accurate aspect ratio consistency $v$ and trade-off parameter $\alpha$ derivation. |
+| **Vectorized Non-Maximum Suppression** | 20 | Pure PyTorch tensor operations with zero Python loops over candidate matches. |
+| **Architectural Rigor & Clean Typing** | 10 | Clear parameter naming, docstrings, and strict tensor shape assertions. |
+| **Verification & Latency Benchmarks** | 10 | End-to-end execution script achieving sub-20ms forward+NMS latency on standard images. |

@@ -1,62 +1,69 @@
-Cheatsheet: CI/CD and Model Monitoring
-
- 1. The MLOps CI/CD Pipeline
-
-A pipeline to automate the building, testing, and deployment of machine learning models.
-
- CI (Continuous Integration) Phase
-Triggered by a code or data change.
-1.  Test Code: Run `pytest` and `flake8` on the source code.
-2.  Validate Data: Check schema and statistical properties of new data.
-3.  Train & Evaluate Model: Run the training script and check if model performance (e.g., accuracy) meets a minimum threshold.
-4.  Package Artifacts: Package the model, code, and dependencies into a reproducible format (usually a Docker container).
-
- CD (Continuous Deployment) Phase
-Triggered by a successful CI run.
-1.  Push to Registry: Push the Docker image to a container registry (e.g., Docker Hub, AWS ECR).
-2.  Deploy to Staging/Production: Deploy the container to a server or cloud service.
-3.  Monitor: Observe the model's live performance.
-
- GitHub Actions
-- What it is: An automation tool built into GitHub to create CI/CD workflows.
-- Where it lives: Workflows are defined in YAML files in the `.github/workflows/` directory.
-- Key YAML Keywords:
-    - `name`: The name of your workflow.
-    - `on`: The event that triggers the workflow (e.g., `push`, `pull_request`).
-    - `jobs`: A workflow consists of one or more jobs.
-    - `runs-on`: The type of machine to run the job on (e.g., `ubuntu-latest`).
-    - `steps`: A sequence of tasks within a job.
-        - `uses`: Use a pre-built action from the marketplace (e.g., `actions/checkout@v3`).
-        - `run`: Execute a shell command.
+# Month 5, Week 3 Cheatsheet: LLM Observability, OpenTelemetry & Continuous Evaluation
 
 ---
 
- 2. Model Monitoring Concepts
+## 1. OpenTelemetry (OTel) GenAI Semantic Conventions
 
-Models degrade in production. Monitoring helps you detect when and why.
+Standardized tracing attributes for monitoring foundational model invocations:
 
-| Drift Type | What Changes? | Core Idea | How to Detect |
-| :--- | :--- | :--- | :--- |
-| Data Drift | The statistical distribution of the input data (X) changes. | The model is seeing new, unfamiliar data. | Compare input data distributions (e.g., using K-S test, Chi-Squared test, or Population Stability Index - PSI). |
-| Concept Drift | The relationship between the input data (X) and the target variable (Y) changes. | The "rules of the game" have changed; learned patterns are no longer valid. | Track the model's performance metrics (e.g., accuracy, F1-score, error rate) over time. A sustained drop indicates drift. |
-
-What to Monitor:
-- Model Performance: Accuracy, precision, recall, F1-score, etc.
-- Data Drift: Are the input features changing?
-- Prediction Drift: Is the distribution of the model's output predictions changing?
-- Operational Health: Latency, traffic, error rate of the API.
+| Semantic Attribute Key | Type | Description | Example Value |
+|:---|:---|:---|:---|
+| `gen_ai.system` | `string` | Target inference provider | `"openai"`, `"anthropic"`, `"vllm"` |
+| `gen_ai.request.model` | `string` | Target model name | `"llama-3-70b-instruct"` |
+| `gen_ai.request.temperature` | `double` | Generation temperature | `0.7` |
+| `gen_ai.usage.prompt_tokens` | `int` | Input token count | `124` |
+| `gen_ai.usage.completion_tokens` | `int` | Output generated tokens | `48` |
+| `gen_ai.response.finish_reasons` | `string[]` | Stop reason array | `["stop"]`, `["length"]` |
 
 ---
 
- 3. Open-Source Monitoring Stack
+## 2. Continuous Evaluation: G-Eval Logit Expectation Scoring
 
-A popular combination of tools to create a comprehensive monitoring dashboard.
+Eliminates discrete rounding variance in LLM-as-a-judge evaluations:
+$$E[\text{Score}] = \sum_{s=1}^5 s \times P(\text{Token}=s) = \sum_{s=1}^5 s \times \frac{\exp(L_s)}{\sum_{j=1}^5 \exp(L_j)}$$
+where $L_s$ is the raw unnormalized logit of score token $s \in \{1, 2, 3, 4, 5\}$.
 
-| Tool | Role | Key Function |
-| :--- | :--- | :--- |
-| Evidently AI | The ML Specialist | A Python library that calculates ML-specific metrics like data drift, concept drift, and model performance by comparing production data to a reference dataset. |
-| Prometheus | The Time-Series Database | Collects and stores the metrics exposed by the Evidently AI service over time. It "scrapes" an HTTP endpoint for new data points. |
-| Grafana | The Dashboard | Visualizes the metrics stored in Prometheus. You can build interactive dashboards with graphs and tables, and set up alerts to be notified when a metric crosses a threshold. |
+```python
+import numpy as np
 
-Workflow:
-`Evidently AI calculates metrics` -> `Prometheus scrapes & stores metrics` -> `Grafana visualizes metrics & sends alerts`
+def compute_geval_expectation(score_logits: dict[int, float]) -> float:
+    scores = np.array(list(score_logits.keys()))
+    logits = np.array(list(score_logits.values()))
+    
+    # Stable softmax
+    exp_logits = np.exp(logits - np.max(logits))
+    probs = exp_logits / np.sum(exp_logits)
+    
+    return float(np.sum(scores * probs))
+```
+
+---
+
+## 3. Production Prometheus Instrumentation
+
+Standard metric exports for enterprise LLM gateways:
+```python
+from prometheus_client import Counter, Histogram
+
+# 1. Total request count partitioned by status
+LLM_REQUESTS = Counter(
+    "llm_requests_total", 
+    "Total LLM gateway requests", 
+    ["model", "status"]
+)
+
+# 2. Token consumption velocity
+LLM_TOKENS = Counter(
+    "llm_token_count_total", 
+    "Total tokens consumed", 
+    ["model", "type"]  # type: 'prompt' or 'completion'
+)
+
+# 3. Request latency distribution
+LLM_LATENCY = Histogram(
+    "llm_latency_seconds", 
+    "End-to-end request latency", 
+    ["model"],
+    buckets=[0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+)
+```

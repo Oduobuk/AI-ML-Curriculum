@@ -1,83 +1,66 @@
-# Month 2, Week 2 Cheatsheet: Logistic Regression & KNN
-
-## 1. Logistic Regression
-
-*   **Purpose:** A **classification algorithm** used to predict the probability of a binary outcome (or multi-class, with extensions).
-*   **Output:** Probability `P(Y=1|X)` between 0 and 1.
-*   **Core Equation:** `P(Y=1|X) = 1 / (1 + e^(-z))` where `z = β₀ + β₁X₁ + ... + βₚXₚ`
-    *   `z`: Linear combination of features (similar to linear regression).
-    *   `1 / (1 + e^(-z))`: The **Sigmoid Function**, which squashes `z` to a value between 0 and 1.
-*   **Decision Boundary:** A threshold (commonly 0.5) is applied to the probability to classify the outcome.
-    *   If `P(Y=1|X) > threshold`, predict class 1.
-    *   Otherwise, predict class 0.
-*   **Model Fitting:** Typically uses **Maximum Likelihood Estimation (MLE)**, often optimized via Gradient Descent, to find parameters (`β`s) that maximize the likelihood of observing the data.
-*   **Cost Function:** Log Loss (or Cross-Entropy Loss) is commonly used.
+# Month 2, Week 2 Cheatsheet: Decision Trees, Split Mechanics & Second-Order Gradient Boosting (GBDT)
 
 ---
 
-## 2. K-Nearest Neighbors (KNN)
+## 1. Classical Impurity Criteria
 
-*   **Purpose:** A simple, non-parametric, instance-based **classification (and regression)** algorithm.
-*   **"Lazy Learner":** No explicit model training phase; it memorizes the training data.
-*   **How it Works (Classification):**
-    1.  For a new data point, calculate its distance to all training data points.
-    2.  Identify the `K` nearest neighbors.
-    3.  Assign the new data point the class label that is most frequent among its `K` neighbors (majority vote).
-*   **Distance Metric:** Commonly Euclidean distance, but others like Manhattan distance can be used.
-*   **Choosing K:**
-    *   Small `K`: More sensitive to noise/outliers, complex decision boundaries.
-    *   Large `K`: Smoother decision boundaries, less sensitive to noise, but can miss local patterns.
-    *   Often chosen via cross-validation. Odd `K` is preferred for binary classification to avoid ties.
-*   **Feature Scaling:** Important for KNN, as distance calculations are sensitive to feature scales.
+For node $S$ with class proportions $p_k \in [0, 1]$ across $K$ classes:
+
+### Shannon Entropy & Information Gain
+$$H(S) = -\sum_{k=1}^K p_k \log_2(p_k), \qquad \text{IG}(S, A) = H(S) - \sum_{v \in \text{Children}} \frac{|S_v|}{|S|} H(S_v)$$
+
+### Gini Impurity
+$$G(S) = 1 - \sum_{k=1}^K p_k^2 = \sum_{j \neq k} p_j p_k$$
+
+### Variance Reduction (Regression)
+$$\text{Var}(S) = \frac{1}{|S|} \sum_{i \in S} (y_i - \bar{y})^2$$
 
 ---
 
-## 3. Evaluation Metrics for Classification
+## 2. Second-Order Taylor Expansion of Gradient Boosted Trees
 
-### a) Confusion Matrix
-A table summarizing actual vs. predicted classifications:
+Modern GBDTs (XGBoost, LightGBM, CatBoost) approximate arbitrary differentiable loss functions via a second-order Taylor expansion at boosting round $t$:
+$$\tilde{\mathcal{L}}^{(t)} \approx \sum_{i=1}^n \left[ g_i f_t(x_i) + \frac{1}{2} h_i f_t^2(x_i) \right] + \gamma T + \frac{\lambda}{2} \sum_{j=1}^T w_j^2$$
+where:
+$$g_i = \left[\frac{\partial \ell(y_i, \hat{y})}{\partial \hat{y}}\right]_{\hat{y}^{(t-1)}}, \qquad h_i = \left[\frac{\partial^2 \ell(y_i, \hat{y})}{\partial \hat{y}^2}\right]_{\hat{y}^{(t-1)}}$$
 
-|                | Predicted Negative | Predicted Positive |
-| :------------- | :----------------- | :----------------- |
-| **Actual Negative** | True Negative (TN) | False Positive (FP) |
-| **Actual Positive** | False Negative (FN) | True Positive (TP) |
-
-### b) Key Metrics
-
-*   **Accuracy:** `(TP + TN) / (TP + TN + FP + FN)`
-    *   Overall proportion of correct predictions. Good for balanced datasets.
-*   **Precision:** `TP / (TP + FP)`
-    *   Of all predicted positives, how many were actually positive? (Minimizes False Positives).
-*   **Recall (Sensitivity, True Positive Rate - TPR):** `TP / (TP + FN)`
-    *   Of all actual positives, how many were correctly identified? (Minimizes False Negatives).
-*   **Specificity (True Negative Rate - TNR):** `TN / (TN + FP)`
-    *   Of all actual negatives, how many were correctly identified?
-*   **False Positive Rate (FPR):** `FP / (FP + TN)` or `1 - Specificity`
-    *   Of all actual negatives, how many were incorrectly identified as positive?
-*   **F1-Score:** `2 * (Precision * Recall) / (Precision + Recall)`
-    *   Harmonic mean of Precision and Recall. Useful for imbalanced datasets.
-
-### c) ROC Curve and AUC
-
-*   **ROC (Receiver Operating Characteristic) Curve:**
-    *   Plots **TPR (Recall)** against **FPR (1 - Specificity)** at various classification thresholds.
-    *   Visualizes the trade-off between true positives and false positives.
-    *   A curve closer to the top-left corner indicates better performance.
-*   **AUC (Area Under the ROC Curve):**
-    *   A single scalar value summarizing the overall performance of a binary classifier across all possible thresholds.
-    *   Ranges from 0 to 1.
-    *   `AUC = 0.5`: Random classifier.
-    *   `AUC = 1.0`: Perfect classifier.
-    *   Higher AUC indicates better model discrimination.
+### Standard Loss Derivatives
+| Objective | Loss $\ell(y, \hat{y})$ | 1st Order Gradient $g_i$ | 2nd Order Hessian $h_i$ |
+|:---|:---|:---|:---|
+| **Squared Error** | $\frac{1}{2}(y - \hat{y})^2$ | $\hat{y} - y$ | $1.0$ |
+| **Binary Log-Loss** | $-y \ln p - (1-y)\ln(1-p)$ | $p - y$ where $p = \sigma(\hat{y})$ | $p(1 - p)$ |
 
 ---
 
-## 4. Comparison: Linear vs. Logistic Regression
+## 3. Optimal Regularized Leaf Weight & Split Gain Formula
 
-| Feature             | Linear Regression           | Logistic Regression         |
-| :------------------ | :-------------------------- | :-------------------------- |
-| **Output Type**     | Continuous numerical value  | Probability (0 to 1)        |
-| **Task**            | Regression                  | Classification              |
-| **Output Function** | Identity (linear equation)  | Sigmoid function            |
-| **Cost Function**   | Mean Squared Error (MSE)    | Log Loss (Cross-Entropy)    |
-| **Model Fitting**   | Least Squares               | Maximum Likelihood Estimation |
+For instance set $I_j$ in leaf $j$, let $G_j = \sum_{i \in I_j} g_i$ and $H_j = \sum_{i \in I_j} h_i$.
+
+### Optimal Leaf Weight $w_j^*$
+$$w_j^* = -\frac{\sum_{i \in I_j} g_i}{\sum_{i \in I_j} h_i + \lambda} = -\frac{G_j}{H_j + \lambda}$$
+
+### Split Gain Metric
+$$\text{Gain} = \frac{1}{2} \left[ \frac{G_L^2}{H_L + \lambda} + \frac{G_R^2}{H_R + \lambda} - \frac{(G_L + G_R)^2}{H_L + H_R + \lambda} \right] - \gamma$$
+- Split is accepted if $\text{Gain} > 0$.
+- Minimum child weight constraint: requires $H_L \ge \text{min\_child\_weight}$ and $H_R \ge \text{min\_child\_weight}$.
+
+---
+
+## 4. LightGBM Histogram Subtraction Optimization
+
+Instead of sorting continuous features ($O(N \log N)$), features are binned into $K=256$ histogram buckets.
+$$\text{Histogram for Larger Child: } H_{\text{larger}} = H_{\text{parent}} - H_{\text{smaller}}$$
+- Reduces histogram construction complexity by $50\%$ at every internal tree split.
+- Bins consume single bytes (`uint8`), enabling $8\times$ cache memory density.
+
+---
+
+## 5. Shrinkage Learning Rate & Base Score Initialization
+
+```python
+# Initial raw logit prediction for binary classification
+base_score = np.log(p_mean / (1.0 - p_mean))
+
+# Additive ensemble step with shrinkage factor eta
+raw_preds = raw_preds + eta * tree.predict(X)
+```

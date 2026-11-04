@@ -1,84 +1,77 @@
-# Month 2, Week 1 Cheatsheet: Linear Regression Fundamentals
-
-## 1. Core Concepts
-
-*   **Regression:** A supervised learning task to predict a **continuous numerical output** (dependent variable `Y`) based on one or more **input features** (independent variables `X`).
-*   **Linear Model:** Assumes a linear relationship between inputs and output.
+# Month 2, Week 1 Cheatsheet: Convex Optimization, Regularized Linear Models & Coordinate Descent
 
 ---
 
-## 2. Types of Linear Regression
+## 1. Ordinary Least Squares (OLS) vs Ridge vs Lasso vs Elastic Net
 
-### a) Simple Linear Regression (SLR)
-*   **Equation:** `Y = β₀ + β₁X + ε`
-    *   `Y`: Dependent variable
-    *   `X`: Independent variable
-    *   `β₀`: Y-intercept
-    *   `β₁`: Slope (coefficient of X)
-    *   `ε`: Error term (residual)
+```
+                         Regularization Geometries
+       L1 Lasso ($\|w\|_1 \le t$)                  L2 Ridge ($\|w\|_2^2 \le t$)
+              ▲                                        ▲
+             / \                                     .---.
+            /   \                                  /       \
+           /     \                                |         |
+       ───◄───────►───                        ────◄─────────►────
+           \     /                                |         |
+            \   /                                  \       /
+             \ /                                     '---'
+              ▼                                        ▼
+    (Corners hit axes -> Sparse $w_j=0$)      (Smooth -> Continuous shrinkage)
+```
 
-### b) Multiple Linear Regression (MLR)
-*   **Equation:** `Y = β₀ + β₁X₁ + β₂X₂ + ... + βₚXₚ + ε`
-    *   `X₁, ..., Xₚ`: Multiple independent variables
-    *   `β₁, ..., βₚ`: Coefficients for each independent variable
-
-### c) Polynomial Regression
-*   **Equation:** `Y = β₀ + β₁X + β₂X² + ... + βₚXᵖ + ε`
-    *   Models non-linear relationships using polynomial terms of the independent variable. Still considered "linear" because it's linear in the coefficients `β`.
-
----
-
-## 3. Model Fitting: Least Squares Method
-
-*   **Goal:** Find the `β₀` and `β₁` (or `β`s) that best fit the data.
-*   **Residual (Error):** `eᵢ = Yᵢ_actual - Yᵢ_predicted`
-    *   The vertical distance between an observed data point and the regression line.
-*   **Sum of Squared Residuals (SSR):** `SSR = Σ (Yᵢ_actual - Yᵢ_predicted)²`
-    *   The sum of the squares of all residuals.
-    *   The **Least Squares Method** minimizes this `SSR` to find the optimal regression line.
+### Analytical Formulations & Objectives
+| Model | Optimization Objective $\mathcal{L}(w)$ | Analytical Solution / Update Rule |
+|:---|:---|:---|
+| **OLS** | $\frac{1}{2n} \|Xw - y\|_2^2$ | $\hat{w} = (X^T X)^{-1} X^T y$ |
+| **Ridge ($L_2$)** | $\frac{1}{2n} \|Xw - y\|_2^2 + \frac{\lambda}{2} \|w\|_2^2$ | $\hat{w} = (X^T X + n\lambda I_d)^{-1} X^T y$ |
+| **Lasso ($L_1$)** | $\frac{1}{2n} \|Xw - y\|_2^2 + \alpha \|w\|_1$ | Non-smooth; solved via Coordinate Descent |
+| **Elastic Net** | $\frac{1}{2n} \|Xw - y\|_2^2 + \alpha \rho \|w\|_1 + \frac{\alpha(1-\rho)}{2} \|w\|_2^2$ | Cyclic Soft-Threshold Coordinate Descent |
 
 ---
 
-## 4. Optimization: Gradient Descent
+## 2. Fast Ridge Solver via Cholesky Factorization ($L L^T$)
 
-*   **Cost Function (Loss Function):** A function that quantifies the error of our model's predictions. For linear regression, `MSE` (Mean Squared Error) is commonly used.
-    *   `MSE = (1/n) * Σ (Yᵢ_actual - Yᵢ_predicted)²`
-*   **Gradient Descent:** An iterative optimization algorithm to find the parameters (`β`s) that minimize the cost function.
-    1.  **Initialize:** Start with random `β` values.
-    2.  **Calculate Gradient:** Compute the partial derivative of the cost function with respect to each `β`. This indicates the direction of steepest ascent.
-    3.  **Update Parameters:** Adjust `β`s in the opposite direction of the gradient (downhill) by a step size determined by the `learning_rate`.
-        *   `β_new = β_old - learning_rate * (∂Cost/∂β_old)`
-    4.  **Repeat:** Iterate until convergence (gradients are near zero, or maximum epochs reached).
+Never invert $A = (X^T X + n\lambda I)$ with `np.linalg.inv` ($O(d^3)$, numerically unstable):
+```python
+import numpy as np
 
----
-
-## 5. Evaluation Metrics
-
-*   **Mean Squared Error (MSE):** `MSE = (1/n) * Σ (Yᵢ_actual - Yᵢ_predicted)²`
-    *   Average of squared errors. Penalizes larger errors more.
-*   **Root Mean Squared Error (RMSE):** `RMSE = √MSE`
-    *   Error in the same units as `Y`, making it more interpretable.
-*   **R-squared (R²):** `R² = 1 - (SSR_model / SST_total)`
-    *   `SSR_model`: Sum of squared residuals of the model.
-    *   `SST_total`: Total sum of squares (variance of `Y` around its mean).
-    *   Measures the proportion of variance in `Y` explained by `X`. Ranges from 0 to 1. Higher is better.
-*   **Adjusted R-squared:** `Adjusted R² = 1 - [(1 - R²) * (n - 1) / (n - p - 1)]`
-    *   `n`: number of samples, `p`: number of predictors.
-    *   Adjusts R² for the number of predictors, penalizing models with too many unnecessary features. Useful for comparing models with different numbers of independent variables.
+def cholesky_ridge(X: np.ndarray, y: np.ndarray, lam: float) -> np.ndarray:
+    n, d = X.shape
+    A = X.T @ X + (n * lam) * np.eye(d)
+    b = X.T @ y
+    # Cholesky: A = L L^T
+    L = np.linalg.cholesky(A)
+    # Forward solve: L z = b
+    z = np.linalg.solve(L, b)
+    # Back solve: L^T w = z
+    w = np.linalg.solve(L.T, z)
+    return w
+```
 
 ---
 
-## 6. Assumptions of Linear Regression
+## 3. Subgradient Calculus & Soft-Thresholding Operator
 
-*   **Linearity:** The relationship between X and Y is linear.
-*   **Independence:** Observations are independent of each other.
-*   **Homoscedasticity:** The variance of residuals is constant across all levels of X.
-*   **Normality:** Residuals are normally distributed.
-*   **No Multicollinearity:** Independent variables are not highly correlated with each other (for MLR).
+Subdifferential of $|w|$ at $w = 0$ is $[-1, 1]$. The closed-form minimizer of $\frac{1}{2}(w - z)^2 + \lambda |w|$ is:
+$$\mathcal{S}_\lambda(z) = \text{sign}(z) \max(0, |z| - \lambda)$$
+
+### Coordinate Descent Update for Lasso
+For feature $j$:
+$$r_{-j} = y - \sum_{k \neq j} X_{:, k} w_k = (y - Xw) + X_{:, j} w_j$$
+$$\rho_j = X_{:, j}^T r_{-j}, \qquad w_j \leftarrow \frac{\mathcal{S}_{n\alpha}(\rho_j)}{\|X_{:, j}\|_2^2}$$
 
 ---
 
-## 7. Overfitting
+## 4. Logistic Regression & Iteratively Reweighted Least Squares (IRLS)
 
-*   Occurs when a model learns the training data too well, including noise, leading to poor performance on unseen data.
-*   Can be a concern with polynomial regression if the degree is too high.
+Cross-entropy loss gradient and Hessian:
+$$\nabla \mathcal{L}(w) = X^T (p - y), \qquad H(w) = X^T S X \quad \text{where } S_{i, i} = p_i(1 - p_i)$$
+
+### Newton-Raphson Update (IRLS)
+$$w_{t+1} = w_t - (X^T S_t X)^{-1} X^T (p_t - y) = (X^T S_t X)^{-1} X^T S_t z_t$$
+where $z_t = X w_t - S_t^{-1} (p_t - y)$ is the adjusted working response.
+
+```python
+def sigmoid(z: np.ndarray) -> np.ndarray:
+    return 1.0 / (1.0 + np.exp(-np.clip(z, -30.0, 30.0)))
+```

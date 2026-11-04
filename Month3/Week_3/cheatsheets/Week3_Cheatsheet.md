@@ -1,85 +1,78 @@
-# Month 3, Week 3 Cheatsheet: Model Validation & Hyperparameter Tuning
-
-## 1. Bias-Variance Trade-off
-
-*   **Bias:** Error from approximating a real-world problem with a simplified model.
-    *   **High Bias:** Model is too simple (underfitting), performs poorly on train and test data.
-*   **Variance:** Error from model's sensitivity to specific training data.
-    *   **High Variance:** Model is too complex (overfitting), performs well on train but poorly on test data.
-*   **Goal:** Find a balance to minimize total generalization error.
+# Month 3, Week 3 Cheatsheet: Modern Computer Vision, ConvNeXt & Vision Transformers (ViT)
 
 ---
 
-## 2. Model Validation
+## 1. Vision Transformer (ViT) Patch Tokenization Geometry
 
-*   **Purpose:** Assess how well a model generalizes to unseen data.
+Decomposes an RGB image $X \in \mathbb{R}^{H \times W \times C}$ into a sequence of non-overlapping patches:
 
-### a) Train-Test Split
-
-*   **Process:** Divide data into training set (for model learning) and test set (for unbiased evaluation).
-*   **Limitation:** Performance estimate can be sensitive to the specific split.
-
-### b) Cross-Validation (CV)
-
-*   **Purpose:** Provides a more robust and reliable estimate of model performance.
-*   **K-Fold Cross-Validation:**
-    1.  Data split into `K` equal-sized folds.
-    2.  Model trained `K` times; each time, one fold is validation, `K-1` folds are training.
-    3.  Performance averaged across `K` iterations.
-*   **Stratified K-Fold CV:** Ensures each fold has the same proportion of class labels as the original dataset (good for imbalanced data).
-*   **Advantages:** More stable performance estimate, uses all data for both training and validation.
-
----
-
-## 3. Hyperparameter Tuning
-
-*   **Hyperparameters:** Parameters set *before* training (e.g., learning rate, `n_estimators`, `max_depth`).
-*   **Goal:** Find the optimal combination of hyperparameters for best model performance.
-
-### a) Grid Search
-
-*   **Process:** Defines a grid of hyperparameter values. Evaluates every possible combination.
-*   **Advantages:** Exhaustive, guarantees finding the best combination within the grid.
-*   **Disadvantages:** Computationally expensive, scales poorly with many hyperparameters.
-
-### b) Random Search
-
-*   **Process:** Defines a range/distribution for each hyperparameter. Samples a fixed number of random combinations.
-*   **Advantages:** Often finds good hyperparameters faster than Grid Search, especially when some hyperparameters are more influential.
-*   **Disadvantages:** Not exhaustive, might miss optimal combinations.
-
-### c) Other Methods
-
-*   **Bayesian Optimization:** Uses a probabilistic model to intelligently explore the hyperparameter space.
-*   **Genetic Algorithms:** Uses evolutionary principles to search for optimal hyperparameters.
+```
+               Image Patch Projection Pipeline
+ ┌─────────────────────────┐
+ │ 224x224 RGB Image (C=3) │
+ └───────────┬─────────────┘
+             │
+   Conv2d(k=16, s=16) -> Patch Size P=16
+             │
+             ▼
+ ┌─────────────────────────┐
+ │ 196 Patches of Dim D    │  N = (224/16) * (224/16) = 196
+ └───────────┬─────────────┘
+             │ Prepend [CLS] Token (index 0)
+             ▼
+ ┌─────────────────────────┐
+ │ 197 Sequence Tokens     │  Shape: [B, 197, D]
+ └───────────┬─────────────┘
+             │ Add 1D Learnable Positional Embeddings
+             ▼
+      Transformer Encoder Stack
+```
 
 ---
 
-## 4. Overfitting & Underfitting
+## 2. Multi-Head Self-Attention on Visual Tokens
 
-*   **Overfitting:** Model learns training data (including noise) too well, performs poorly on new data (high variance, low bias).
-*   **Underfitting:** Model is too simple, fails to capture underlying patterns, performs poorly on both training and test data (high bias, high variance).
-*   **Generalization:** The ability of a model to perform well on unseen data.
+For token sequence $Z \in \mathbb{R}^{N \times D}$:
+$$Q = Z W_Q, \quad K = Z W_K, \quad V = Z W_V$$
+$$\text{Attention}(Q, K, V) = \text{Softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right) V$$
+- **Pre-LayerNorm Residual Block**:
+  $$z'_l = \text{MHSA}(\text{LayerNorm}(z_{l-1})) + z_{l-1}$$
+  $$z_l = \text{MLP}(\text{LayerNorm}(z'_l)) + z'_l$$
 
 ---
 
-## 5. MLflow: ML Lifecycle Management
+## 3. Attention Rollout Interpretability
 
-*   **Purpose:** Open-source platform to manage the end-to-end machine learning lifecycle.
+Traces information flow from input patches to the final `[CLS]` token across $L$ layers:
+$$R^{(L)} = \bar{A}^{(L)} \bar{A}^{(L-1)} \cdots \bar{A}^{(1)} \quad \text{where } \bar{A}^{(l)} = 0.5 A^{(l)} + 0.5 I$$
+- Row 0 of $R^{(L)}$ (excluding `[CLS]` self-token) yields the 196-element attention heatmap.
+- Reshaped to $14 \times 14$ and bicubic upsampled to $224 \times 224$ to overlay over input pixels.
 
-### a) MLflow Tracking
+---
 
-*   **Functionality:** Records and queries experiments (parameters, metrics, code versions, artifacts).
-*   **Benefit:** Reproducibility and comparison of runs.
+## 4. Modern ConvNeXt Architecture (Liu et al. 2022)
 
-### b) MLflow Projects
+Adopts Transformer design principles into convolutional networks:
+- **Large Kernel Depthwise Conv**: $7 \times 7$ depthwise convolution (`groups=C`).
+- **Inverted Bottleneck**: Pointwise $1 \times 1$ conv expanding channels $4 \times$.
+- **Fewer Normalizations & Activations**: Single LayerNorm and single GeLU activation per block.
+- **Layer Scale**: Per-channel scaling factor $\gamma$ initialized to $10^{-6}$.
 
-*   **Functionality:** Packages ML code in a reusable and reproducible format.
+```python
+class ConvNeXtBlock(nn.Module):
+    def __init__(self, dim: int):
+        super().__init__()
+        self.dwconv = nn.Conv2d(dim, dim, kernel_size=7, padding=3, groups=dim)
+        self.norm = nn.LayerNorm(dim)
+        self.pwconv1 = nn.Linear(dim, 4 * dim)
+        self.act = nn.GELU()
+        self.pwconv2 = nn.Linear(4 * dim, dim)
+        self.gamma = nn.Parameter(1e-6 * torch.ones(dim))
 
-### c) MLflow Models
-
-*   **Functionality:** Manages and deploys ML models from various libraries to diverse deployment tools.
-
-### d) MLflow Model Registry
-
-*   **Functionality:** Centralized store for collaborative model management (versioning, stage transitions).
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        res = x
+        x = self.dwconv(x).permute(0, 2, 3, 1)
+        x = self.pwconv2(self.act(self.pwconv1(self.norm(x))))
+        x = (self.gamma * x).permute(0, 3, 1, 2)
+        return res + x
+```
